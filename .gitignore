@@ -1,5 +1,8 @@
 .env
 .DS_Store
+Thumbs.db
+node_modules/
+
 raw/
 data/
 *.ipynb
