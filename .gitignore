@@ -1,0 +1,12 @@
+.env
+.DS_Store
+raw/
+data/
+*.ipynb
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.log.gz
+*.bak
