@@ -5,7 +5,7 @@ from enum import StrEnum, auto
 from dreamcraft.app.common.messaging import Mailbox
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo
 from dreamcraft.app.services.goal_service import GoalService
-from dreamcraft.domain.goal_model import GoalNode, GoalMap
+from dreamcraft.domain.goal_models import GoalNode, GoalMap
 
 class LogicState(StrEnum):
     INIT = auto()       # 初始化规划
@@ -19,6 +19,7 @@ class LogicSession:
     def __init__(self, target_goal):
         self.goal: str = target_goal
         self.imagination_stack: list[GoalMap] = []
+        self.is_imaginated: set[GoalNode] = set()  # 记录哪些节点已经经过想象状态检查
         self.current_node: GoalNode | None = None
         self.error_history = []
         self.step_count = 0

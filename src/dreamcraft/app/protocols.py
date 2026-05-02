@@ -1,11 +1,14 @@
 from typing import Protocol
 from langchain_core.tools import tool
 import numpy as np
-from dreamcraft.domain.goal_model import GoalMap
+from dreamcraft.domain.goal_models import GoalMap
 
 from langchain_core.runnables import Runnable
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
+
+from dreamcraft.domain.skill_models import Skill
+from dreamcraft.domain.wiki_models import WikiDocument
 
 class IGoalRepo(Protocol):
     def add_goal(self, goal_map: GoalMap):
@@ -14,11 +17,15 @@ class IGoalRepo(Protocol):
         ...
 
 class IWikiRepo(Protocol):
-    def search(self, query_embedding, top_k=5) -> list[dict]:
+    def query(self, query_embedding, top_k=3) -> list[WikiDocument]:
         ...
 
 class ISkillRepo(Protocol):
-    def search(self, query_embedding, top_k=5) -> list[dict]:
+    def query(self, query_embedding, top_k=3) -> list[Skill]:
+        ...
+    def add_skill(self, skill: Skill, skill_embedding: np.ndarray):
+        ...
+    def get_skill(self, ref: int | str) -> Skill:
         ...
 
 class ILLMClient(Protocol):

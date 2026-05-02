@@ -1,4 +1,4 @@
-from dreamcraft.domain.goal_model import GoalMap
+from dreamcraft.domain.goal_models import GoalMap
 import pickle
 
 

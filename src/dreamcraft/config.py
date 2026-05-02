@@ -9,6 +9,8 @@ CACHE_DIR = BASE_DIR / ".cache"
 LOG_DIR = BASE_DIR / "logs"
 PROMPT_DIR = BASE_DIR / "src" / "dreamcraft" / "prompts"
 DATA_DIR = BASE_DIR / "data"
+WIKI_DIR = DATA_DIR / "wiki"
+SKILL_DIR = DATA_DIR / "skill"
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -24,12 +26,10 @@ class Settings(BaseSettings):
     request_timeout: int = 30
     mineflayer_port: int = 3000
     mineflayer_request_timeout: int = 600
-    wiki_documents_path: Path = DATA_DIR / "wiki_documents.json"
-    wiki_embeddings_npy_path: Path = DATA_DIR / "wiki_embeddings.npy"
-    wiki_faiss_index_path: Path = DATA_DIR / "wiki_faiss.index"
-    skill_documents_path: Path = DATA_DIR / "skill_documents.json"
-    skill_embeddings_npy_path: Path = DATA_DIR / "skill_embeddings.npy"
-    skill_faiss_index_path: Path = DATA_DIR / "skill_faiss.index"
+    wiki_documents_path: Path = WIKI_DIR / "wiki_documents.json"
+    wiki_faiss_index_path: Path = WIKI_DIR / "wiki_faiss.index"
+    skill_documents_path: Path = SKILL_DIR / "skill_documents.json"
+    skill_faiss_index_path: Path = SKILL_DIR / "skill_faiss.index"
     path_pkl_path: Path = DATA_DIR / "paths.pkl"
     prompt_dir: Path = PROMPT_DIR
 

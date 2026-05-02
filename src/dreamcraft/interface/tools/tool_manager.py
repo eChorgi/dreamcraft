@@ -56,6 +56,10 @@ class WikiQueryArgs(ThoughtToolArgs):
     keyword: str = Field(description="查询关键词(英文)")
     items: int = Field(default=3, description="返回条数，你需要尽可能少的填写此参数，只查询最重要的内容")
 
+class SkillQueryArgs(ThoughtToolArgs):
+    keyword: str = Field(description="查询关键词")
+    items: int = Field(default=3, description="返回条数，你需要尽可能少的填写此参数，只查询最重要的内容")
+
 class ToolManager:
     def __init__(self, knowledges: KnowledgeService):
         self.knowledges = knowledges
@@ -66,15 +70,25 @@ class ToolManager:
         在内部定义工具可以闭包引用 self
         """
         
-        @tool("wiki_query", args_schema=WikiQueryArgs)
+        @tool("query_wiki", args_schema=WikiQueryArgs)
         @need_thought
-        def wiki_query(keyword: str, items: int = 3) -> str:
+        def query_wiki(keyword: str, items: int = 3) -> str:
             """
             这是一个Minecraft wiki查询工具，输入英文关键词和返回条数，输出相关的wiki内容. 
             查询特定的 单一知识点。严禁输入过于宽泛的问题（如“how to win”），请针对流程中的具体环节进行针对性查询（如“Blaze Spawning Mechanics”）
             """
             # 这里的调用会走 Service 层，完美符合 DDD
             return self.knowledges.query_wiki(keyword, items)
+
+        @tool("query_skill", args_schema=SkillQueryArgs)
+        @need_thought
+        def query_skill(keyword: str, items: int = 3) -> str:
+            """
+            这是一个你的skill查询工具,你可以通过它查询你已经掌握的技能。输入技能相关的关键词和返回条数，输出相关的技能内容.
+            查询特定的 单一技能。
+            """
+            # 这里的调用会走 Service 层，完美符合 DDD
+            return self.knowledges.query_skill(keyword, items)
 
         @tool("expand_path") # 简单参数也可以不写 Schema 类
         @need_thought
@@ -84,6 +98,7 @@ class ToolManager:
             return "路径已扩展"
 
         return {
-            "wiki_query": wiki_query, 
+            "query_wiki": query_wiki, 
+            "query_skill": query_skill,
             "expand_path": expand_path
         }

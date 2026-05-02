@@ -4,4 +4,4 @@
 ## 状态信息
     {state}
 ## 任务
-请你判断能否通过简单的步骤(少量的循环属于简单步骤)从当前节点达到目标节点。给出【Final Answer】 True 或 False
+请你根据wiki知识和当前掌握的skill判断能否通过简单的步骤(少量的循环属于简单步骤)从当前节点达到目标节点。给出【Final Answer】 True 或 False

@@ -24,7 +24,7 @@ class LLMClient:
             temperature=settings.temperature,
             timeout=settings.request_timeout, 
         )
-        
+        self.dim = settings.embedding_dimension
         # 2. 初始化向量模型 (用于检索、相似度计算)
         # self.embeddings = OpenAIEmbeddings(
         #     api_key=settings.embedding_api_key,
@@ -43,7 +43,7 @@ class LLMClient:
         response = self.embedding_client.embeddings.create(
             input=text,
             model="text-embedding-v4",
-            dimensions=1536
+            dimensions=self.dim
         )
         return np.array(response.data[0].embedding).reshape(1, -1).astype('float32')
     

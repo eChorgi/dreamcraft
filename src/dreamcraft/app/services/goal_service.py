@@ -1,5 +1,5 @@
 
-from dreamcraft.domain.goal_model import GoalMap, GoalNode
+from dreamcraft.domain.goal_models import GoalMap, GoalNode
 from dreamcraft.app.protocols import IGoalRepo
 
 class GoalService:

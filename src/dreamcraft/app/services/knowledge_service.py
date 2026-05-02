@@ -12,11 +12,11 @@ class KnowledgeService:
 
     def query_wiki(self, keyword, items=3):
         query_embedding = self.llm.embed(keyword)
-        results = self.wiki.search(query_embedding, top_k=items*5)
+        results = self.wiki.query(query_embedding, top_k=items*5)
         
         final = []
         for r in results:
-            if len(r["content"]) < 10:  # 简单过滤掉过短的内容
+            if len(r.content) < 10:  # 简单过滤掉过短的内容
                 continue
             final.append(r)
             if len(final) >= items:
@@ -26,5 +26,9 @@ class KnowledgeService:
     
     def query_skill(self, keyword, items=3):
         query_embedding = self.llm.embed(keyword)
-        return self.skill.search(query_embedding, top_k=items)
+        return self.skill.query(query_embedding, top_k=items)
+    
+    def add_skill(self, skill):
+        skill_embedding = self.llm.embed(skill.summary).reshape(1, -1).astype('float32')
+        self.skill.add_skill(skill, skill_embedding)
     
