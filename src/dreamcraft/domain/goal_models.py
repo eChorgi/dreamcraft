@@ -1,19 +1,10 @@
 from collections import deque
 from dataclasses import dataclass
 from typing import Dict, List, Union
-
-@dataclass
-class State:
-        inventory: Dict[str, int]
-        equipment: Dict[str, str]
-        health: int
-        hunger: int
-        entities: List[str]
-        voxels: List[str]
-        description: str
+from dreamcraft.domain.snapshot_models import Snapshot
 
 class GoalNode:
-    def __init__(self, description = None, next_nodes = None, predicted_state: State = None, actual_state: State = None):
+    def __init__(self, description = None, next_nodes = None, predicted_snapshot: Snapshot = None, actual_snapshot: Snapshot = None):
         # 拓扑结构
         self.next_nodes = set(next_nodes) if next_nodes else set()
         for node in self.next_nodes:
@@ -24,8 +15,8 @@ class GoalNode:
         self.description = description
 
         # 节点想象与实际状态
-        self.predicted_state = predicted_state
-        self.actual_state = actual_state
+        self.predicted_snapshot = predicted_snapshot
+        self.actual_snapshot = actual_snapshot
         self.feasibility: bool = None
 
         self.ind = None
@@ -193,8 +184,8 @@ class GoalMap:
                 return node_mapping[node]
             new_node = GoalNode(
                 description=node.description,
-                predicted_state=node.predicted_state,
-                actual_state=node.actual_state,
+                predicted_snapshot=node.predicted_snapshot,
+                actual_snapshot=node.actual_snapshot,
                 feasibility=node.feasibility
             )
             node_mapping[node] = new_node
@@ -219,8 +210,8 @@ class GoalMap:
                 return node_mapping[node]
             new_node = GoalNode(
                 description=node.description,
-                predicted_state=node.predicted_state,
-                actual_state=node.actual_state,
+                predicted_snapshot=node.predicted_snapshot,
+                actual_snapshot=node.actual_snapshot,
             )
             node_mapping[node] = new_node
             for next_node in node.next_nodes:

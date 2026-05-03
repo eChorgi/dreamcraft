@@ -11,9 +11,9 @@ from dreamcraft.domain.skill_models import Skill
 from dreamcraft.domain.wiki_models import WikiDocument
 
 class IGoalRepo(Protocol):
-    def add_goal(self, goal_map: GoalMap):
+    def add(self, goal_map: GoalMap):
         ...
-    def get_goal(self, goal_id: int) -> GoalMap:
+    def get(self, goal_id: int) -> GoalMap:
         ...
 
 class IWikiRepo(Protocol):
@@ -23,9 +23,9 @@ class IWikiRepo(Protocol):
 class ISkillRepo(Protocol):
     def query(self, query_embedding, top_k=3) -> list[Skill]:
         ...
-    def add_skill(self, skill: Skill, skill_embedding: np.ndarray):
+    def add(self, skill: Skill, skill_embedding: np.ndarray):
         ...
-    def get_skill(self, ref: int | str) -> Skill:
+    def get(self, ref: int | str) -> Skill:
         ...
 
 class ILLMClient(Protocol):

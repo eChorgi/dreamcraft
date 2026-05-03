@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     wiki_faiss_index_path: Path = WIKI_DIR / "wiki_faiss.index"
     skill_documents_path: Path = SKILL_DIR / "skill_documents.json"
     skill_faiss_index_path: Path = SKILL_DIR / "skill_faiss.index"
+    snapshot_documents_path: Path = DATA_DIR / "snapshot_documents.json"
+    snapshot_faiss_index_path: Path = DATA_DIR / "snapshot_faiss.index"
     path_pkl_path: Path = DATA_DIR / "paths.pkl"
     prompt_dir: Path = PROMPT_DIR
 

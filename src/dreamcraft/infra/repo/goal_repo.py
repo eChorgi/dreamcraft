@@ -35,10 +35,10 @@ class GoalRepo:
         with open(file_path, 'wb') as f:
             pickle.dump(self.maps, f)
     
-    def add_goal(self, goal_map: GoalMap):
+    def add(self, goal_map: GoalMap):
         """添加新的路径数据。"""
         self.maps.append(goal_map)
     
-    def get_goal(self, goal_id: int) -> GoalMap:
+    def get(self, goal_id: int) -> GoalMap:
         """根据路径 ID 查询路径数据。"""
         return self.maps[goal_id]

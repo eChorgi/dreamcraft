@@ -13,7 +13,7 @@ class GoalService:
         final_node = GoalNode(description = goal)
         start_node.insert_after(final_node)
         m = GoalMap(start_node = start_node, final_node = final_node)
-        self.goals.add_goal(m)
+        self.goals.add(m)
         print(f"新建目标地图: {m}")
         return m
     
@@ -25,5 +25,5 @@ class GoalService:
     
     def _get_node(self, node_ref: GoalNode | int | str, parent_goal: GoalMap = None) -> GoalNode:
         if parent_goal is None:
-            parent_goal = self.goals.get_goal(-1)  # 默认使用最后一个目标地图
+            parent_goal = self.goals.get(-1)  # 默认使用最后一个目标地图
         return parent_goal.get_node(node_ref)

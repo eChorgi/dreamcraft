@@ -58,7 +58,7 @@ class SkillRepo:
         distances, indices = self.faiss_index.search(query_embedding, actual_k)
         return [self.skills[i] for i in indices[0]]
 
-    def add_skill(self, skill: Skill, skill_embedding: np.ndarray):
+    def add(self, skill: Skill, skill_embedding: np.ndarray):
         """添加新技能到知识库，并更新 FAISS 索引和文档列表"""
         self.skills.append(skill)
         self.skills_dict[skill.name] = skill
@@ -66,7 +66,7 @@ class SkillRepo:
         self.save_skills_to_json(self.json_path)
         self.save_faiss_index(self.faiss_index_path)
     
-    def get_skill(self, ref: int | str) -> Skill:
+    def get(self, ref: int | str) -> Skill:
         """根据索引或技能名称获取技能信息"""
         if isinstance(ref, int):
             return self.skills[ref]

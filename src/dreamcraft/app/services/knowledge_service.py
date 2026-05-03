@@ -30,5 +30,5 @@ class KnowledgeService:
     
     def add_skill(self, skill):
         skill_embedding = self.llm.embed(skill.summary).reshape(1, -1).astype('float32')
-        self.skill.add_skill(skill, skill_embedding)
+        self.skill.add(skill, skill_embedding)
     
