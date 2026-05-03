@@ -1,5 +1,5 @@
 ## 已完成的目标列表
-{completed_waypoints}
+{completed}
 
 ## 当前目标描述
 {target}

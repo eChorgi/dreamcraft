@@ -34,24 +34,24 @@ class PromptRepo:
             formatted_prompt = prompt + f"\n\n# 本次任务查询\n{query}"
         return formatted_prompt
 
-    def imaginate(self, completed_waypoints: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot) -> str:
+    def imaginate(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot) -> str:
         """专门用于生成想象状态的 prompt 模板"""
         prompt = self.react(
             role = self.load("imaginate_role"),
             query = self.load("imaginate_query").format(
-                completed_waypoints = "- " + "\n- ".join([wp.description if isinstance(wp, Waypoint) else wp for wp in completed_waypoints]),
+                completed = "- " + "\n- ".join([wp.description if isinstance(wp, Waypoint) else wp for wp in completed]),
                 target=target.description if isinstance(target, Waypoint) else target,
                 snapshot = snapshot.json
             )
         )
         return prompt
 
-    def feasibility_check(self, completed_waypoints: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot) -> str:
+    def feasibility_check(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot) -> str:
         """专门用于生成可行性检查的 prompt 模板"""
         prompt = self.react(
             role = self.load("feasibility_check_role"),
             query = self.load("feasibility_check_query").format(
-                completed_waypoints = "- " + "\n- ".join([wp.description if isinstance(wp, Waypoint) else wp for wp in completed_waypoints]),
+                completed = "- " + "\n- ".join([wp.description if isinstance(wp, Waypoint) else wp for wp in completed]),
                 target=target.description if isinstance(target, Waypoint) else target,
                 snapshot = snapshot.json
             )

@@ -4,14 +4,14 @@ from typing import Dict, List, Union
 from dreamcraft.domain.snapshot import Snapshot
 
 class Waypoint:
-    def __init__(self, description = None, next = None, predicted_snapshot: Snapshot = None, actual_snapshot: Snapshot = None):
+    def __init__(self, description = None, next = None, imaginated_snapshot: Snapshot = None, actual_snapshot: Snapshot = None):
         # 创建时定义
         #   节点llm描述
         self.description = description
 
         # 运行时赋值
         #   节点想象与实际状态
-        self.predicted_snapshot = predicted_snapshot
+        self.imaginated_snapshot = imaginated_snapshot
         self.actual_snapshot = actual_snapshot
         #   节点可行性
         self.is_feasible: bool = None
@@ -147,24 +147,24 @@ class Waypoint:
             self.quest.init()  # 重新生成 waypoints 确保索引正确
 
         
-    def expand_path_between(self, target_waypoint:'Waypoint', waypoints: list[Union['Waypoint', str]]):
-        if target_waypoint in self.next:
+    def expand_between(self, target: 'Waypoint', path: list[Union['Waypoint', str]]):
+        if target in self.next:
             is_target_next = True
-        elif target_waypoint in self.prev:
+        elif target in self.prev:
             is_target_next = False
         else:
-            raise ValueError(f"目标节点 {target_waypoint} 既不是当前节点 {self} 的直接子节点，也不是直接父节点，无法扩展路径")
+            raise ValueError(f"目标节点 {target} 既不是当前节点 {self} 的直接子节点，也不是直接父节点，无法扩展路径")
 
-        waypoints = [Waypoint.coerce(wp) for wp in waypoints]
+        path = [Waypoint.coerce(wp) for wp in path]
         current_ptr = self
-        for waypoint in waypoints:
+        for waypoint in path:
             # 可以在这里自动绑定 quest，保证领域对象一致性
             waypoint.quest = self.quest 
-            current_ptr.insert_between(target_waypoint, waypoint)
+            current_ptr.insert_between(target, waypoint)
             if is_target_next:
                 current_ptr = waypoint
             else:
-                target_waypoint = waypoint
+                target = waypoint
 
     #静态类方法，提供从字符串描述创建节点的便捷方式
     @staticmethod
@@ -191,7 +191,7 @@ class Quest:
                 return mapping[waypoint]
             new_waypoint = Waypoint(
                 description=waypoint.description,
-                predicted_snapshot=waypoint.predicted_snapshot,
+                imaginated_snapshot=waypoint.imaginated_snapshot,
                 actual_snapshot=waypoint.actual_snapshot,
                 feasibility=waypoint.is_feasible
             )
@@ -217,7 +217,7 @@ class Quest:
                 return mapping[waypoint]
             new_waypoint = Waypoint(
                 description=waypoint.description,
-                predicted_snapshot=waypoint.predicted_snapshot,
+                imaginated_snapshot=waypoint.imaginated_snapshot,
                 actual_snapshot=waypoint.actual_snapshot,
             )
             mapping[waypoint] = new_waypoint
@@ -393,7 +393,7 @@ class Quest:
             "adjacency_list": self.adjancency_list,
         }
     
-    def sub_map(self, origin: Waypoint | int | str, target: Waypoint | int | str = None) -> 'Quest':
+    def slice(self, origin: Waypoint | int | str, target: Waypoint | int | str = None) -> 'Quest':
         origin = self.get_waypoint(origin)
         if target is None:
             target = self.target

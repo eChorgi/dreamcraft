@@ -28,6 +28,8 @@ def bootstrap():
     
     class ServiceContainer(GlobalContainer):
         knowledge: KnowledgeService
+        quest: QuestService
+        llm: LLMService
 
     class OrchestratorContainer(GlobalContainer):
         mission: MissionOrchestrator

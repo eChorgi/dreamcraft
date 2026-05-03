@@ -41,3 +41,15 @@ class Snapshot:
             print(f"⚠️ JSON 解析错误: {e}")
             return None
         return snapshot
+    
+    @staticmethod
+    def default():
+        return Snapshot(
+            inventory={},
+            equipment={},
+            health=20,
+            hunger=20,
+            entities=[],
+            voxels=[],
+            description=""
+        )

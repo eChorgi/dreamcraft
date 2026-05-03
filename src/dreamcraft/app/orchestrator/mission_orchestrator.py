@@ -15,14 +15,15 @@ class MissionState(StrEnum):
     FIX = auto()        # 失败修正
     SUCCESS = auto()    # 任务成功
 
-class MissionSession:
+class MissionContext:
     """上下文总线：在整个状态机流转中传递的唯一数据包"""
     def __init__(self, target):
         self.target: str = target
+        self.quest: Quest | None = None  # 当前任务地图
         self.imaginating_waypoint: Waypoint | None = None  # 当前正在进行想象状态检查的节点
         self.excuting_waypoint: Waypoint | None = None # 当前正在执行的节点
 
-        self.completed_waypoints: set[Waypoint] = set()  # 已完成的节点集合
+        self.completed: list[Waypoint] = []  # 已完成的节点列表
 
         self.is_imaginated: set[Waypoint] = set()  # 记录哪些节点已经经过想象状态检查
         self.error_history = []
@@ -46,32 +47,32 @@ class MissionOrchestrator:
 
     def run(self, target: str):
         """状态机的主循环"""
-        session = MissionSession(target)
+        ctx = MissionContext(target)
         current_state = MissionState.INIT
         max_steps = 10000
 
-        while current_state != MissionState.END and session.step_count < max_steps:
+        while current_state != MissionState.END and ctx.step_count < max_steps:
             handler_method_name = f"handle_{current_state.lower()}"
             handler = getattr(self, handler_method_name, self.handle_unknown)
 
-            current_state = handler(session)
-            session.step_count += 1
+            current_state = handler(ctx)
+            ctx.step_count += 1
             
-        if session.step_count >= max_steps:
+        if ctx.step_count >= max_steps:
             print("任务因超时或死循环被系统强制终止。")
 
     # ================= 状态处理方法 =================
 
-    def handle_init(self, session: MissionSession) -> MissionState:
-        self.quest.new_quest(session.target)
-        session.imaginating_waypoint = self.quest.get_waypoint(0)  # 从起始节点开始进行想象状态检查
+    def handle_init(self, ctx: MissionContext) -> MissionState:
+        ctx.quest = self.quest.add_quest(ctx.target)
+        ctx.imaginating_waypoint = ctx.quest.origin
         return MissionState.CHECK_FEASIBILITY
 
-    def handle_try_expand(self, session: MissionSession) -> MissionState:
+    def handle_try_expand(self, ctx: MissionContext) -> MissionState:
         
         is_feasible = self.llm.try_expand(
-            completed_waypoints = list(session.completed_waypoints),
-            target = session.imaginating_waypoint,
+            completed = ctx.completed,
+            target = ctx.imaginating_waypoint,
             snapshot = self.get_current_snapshot()
         )
         if is_feasible:
@@ -79,16 +80,16 @@ class MissionOrchestrator:
         else:
             return MissionState.EXPAND
 
-    def handle_execute(self, session: MissionSession) -> MissionState:
-        result = self.action_agent.execute(session.paths)
+    def handle_execute(self, ctx: MissionContext) -> MissionState:
+        result = self.action_agent.execute(ctx.paths)
         
         if result.success:
             return MissionState.REVIEW
         else:
-            session.error_history.append(result.error_msg)
+            ctx.error_history.append(result.error_msg)
             return "REVISE_PLAN"
 
-    def handle_unknown(self, session: MissionSession) -> MissionState:
+    def handle_unknown(self, ctx: MissionContext) -> MissionState:
         raise ValueError("进入了未知的系统状态！")
     
     

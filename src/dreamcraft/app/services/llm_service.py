@@ -93,14 +93,14 @@ class LLMService:
             "messages": messages
         }
 
-    def check_feasibility(self, completed_waypoints: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, max_iterations: int = 5, max_retries: int = 3) -> bool:
+    def check_feasibility(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, max_iterations: int = 5, max_retries: int = 3) -> bool:
         messages = []
         tools = self.tool.get_tools(["query_wiki", "query_skill"])
 
         while True:
             response = self.react(
                 prompt = self.prompt.feasibility_check(
-                    completed_waypoints = completed_waypoints,
+                    completed = completed,
                     target = target,
                     snapshot = snapshot
                 ),
@@ -123,14 +123,14 @@ class LLMService:
                     return False
                 continue
 
-    def imaginate(self, completed_waypoints: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, max_iterations: int = 5, max_retries: int = 3) -> Snapshot:
+    def imaginate(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, max_iterations: int = 5, max_retries: int = 3) -> Snapshot:
         messages = []
         tools = self.tool.get_tools(["query_wiki"])
 
         while True:
             response = self.react(
                 prompt = self.prompt.imaginate(
-                    completed_waypoints = completed_waypoints,
+                    completed = completed,
                     target = target,
                     snapshot = snapshot
                 ),
@@ -152,14 +152,14 @@ class LLMService:
                     return False
                 continue
 
-    def try_expand(self, completed_waypoints: list[Waypoint | str], target: Waypoint | str, max_iterations: int = 5, max_retries: int = 3) -> Snapshot:
+    def try_expand(self, completed: list[Waypoint | str], target: Waypoint | str, max_iterations: int = 5, max_retries: int = 3) -> Snapshot:
         messages = []
         tools = self.tool.get_tools(["query_wiki"])
 
         while True:
             response = self.react(
                 prompt = self.prompt.imaginate(
-                    completed_waypoints = completed_waypoints,
+                    completed = completed,
                     target = target,
                     snapshot = snapshot
                 ),
