@@ -1,6 +1,9 @@
 from dreamcraft.config import PROMPT_DIR
 from pathlib import Path
 
+from dreamcraft.domain.quest import Waypoint
+from dreamcraft.domain.snapshot import Snapshot
+
 class PromptRepo:
     def __init__(self, settings):
         self.dir = settings.prompt_dir
@@ -20,3 +23,37 @@ class PromptRepo:
         
         with open(prompt_path, "r", encoding="utf-8") as f:
             return f.read()
+    
+    def react(self, role: str, query: str) -> str:
+        """ react 基础模板，供后续进一步定制"""
+        prompt = self.load("react")
+        #首先判断 prompt 中是否存在 {query} 占位符，如果没有就默认在末尾添加
+        if "{query}" in prompt:
+            formatted_prompt = prompt.format(role=role, query=query)
+        else:
+            formatted_prompt = prompt + f"\n\n# 本次任务查询\n{query}"
+        return formatted_prompt
+
+    def imaginate(self, completed_waypoints: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot) -> str:
+        """专门用于生成想象状态的 prompt 模板"""
+        prompt = self.react(
+            role = self.load("imaginate_role"),
+            query = self.load("imaginate_query").format(
+                completed_waypoints = "- " + "\n- ".join([wp.description if isinstance(wp, Waypoint) else wp for wp in completed_waypoints]),
+                target=target.description if isinstance(target, Waypoint) else target,
+                snapshot = snapshot.json
+            )
+        )
+        return prompt
+
+    def feasibility_check(self, completed_waypoints: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot) -> str:
+        """专门用于生成可行性检查的 prompt 模板"""
+        prompt = self.react(
+            role = self.load("feasibility_check_role"),
+            query = self.load("feasibility_check_query").format(
+                completed_waypoints = "- " + "\n- ".join([wp.description if isinstance(wp, Waypoint) else wp for wp in completed_waypoints]),
+                target=target.description if isinstance(target, Waypoint) else target,
+                snapshot = snapshot.json
+            )
+        )
+        return prompt

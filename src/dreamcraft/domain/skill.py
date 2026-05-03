@@ -1,3 +1,6 @@
+import json
+
+
 class Skill:
     def __init__(self, name: str, description: str = None, impact: str = None, dependency: list["Skill"] = None, javascript: str = None):
         self.name = name
@@ -6,6 +9,21 @@ class Skill:
         self.javascript = javascript
         self.dependency = dependency if dependency else []
     
+    def __repr__(self):
+        return json.dumps(self.json, ensure_ascii=False)
+    
+    def __str__(self):
+        return json.dumps(self.json, ensure_ascii=False)
+
+
+    @property
+    def json(self):
+        return {
+            "name": self.name,
+            "description": self.description,
+            "impact": self.impact,
+        }
+
     @property
     def summary(self):
         _sum = """## 标识符

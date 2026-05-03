@@ -60,45 +60,80 @@ class SkillQueryArgs(ThoughtToolArgs):
     keyword: str = Field(description="查询关键词")
     items: int = Field(default=3, description="返回条数，你需要尽可能少的填写此参数，只查询最重要的内容")
 
-class ToolManager:
+class ToolRepo:
     def __init__(self, knowledges: KnowledgeService):
         self.knowledges = knowledges
+        self._all_tools = None  # 用于缓存工具实例的字典
 
-    def get_tools(self) -> dict[str, tool]:
+    @property
+    def all_tools(self) -> dict[str, tool]:
         """
         动态返回绑定了当前 Service 实例的工具列表
         在内部定义工具可以闭包引用 self
         """
         
-        @tool("query_wiki", args_schema=WikiQueryArgs)
+        if self._all_tools is not None:
+            return self._all_tools  # 返回缓存的工具实例
+
+        @tool("query_wiki",
+            description=
+            """
+            # 功能
+             - 这是一个Minecraft wiki查询工具，输入英文关键词和返回条数，输出相关的wiki内容. 
+            # 输出格式
+            ```
+            {
+                "document": WikiDocument对象,
+                "l2_distance": LLM生成的查询向量与文档向量之间的L2距离 范围在 0-2 之间 (数值越小表示越相关, 如果大于0.6说明相关度较低)
+            }
+            ```
+            # 注意
+             - 你应该尽可能具体地描述你想查询的内容，避免过于宽泛的关键词（如“enchanting”），而应该针对流程中的具体环节进行针对性查询（如“enchanting table”）。
+             - 如果你发现查询结果的匹配度得分过低（如都低于0.1），则说明你可能没有查询到相关内容
+            """, 
+            args_schema=WikiQueryArgs)
         @need_thought
         def query_wiki(keyword: str, items: int = 3) -> str:
-            """
-            这是一个Minecraft wiki查询工具，输入英文关键词和返回条数，输出相关的wiki内容. 
-            查询特定的 单一知识点。严禁输入过于宽泛的问题（如“how to win”），请针对流程中的具体环节进行针对性查询（如“Blaze Spawning Mechanics”）
-            """
+            
             # 这里的调用会走 Service 层，完美符合 DDD
             return self.knowledges.query_wiki(keyword, items)
 
-        @tool("query_skill", args_schema=SkillQueryArgs)
+        @tool("query_skill",
+            description=
+            """
+            # 功能
+            - 这是一个你的skill查询工具,你可以通过它查询你已经掌握的技能。输入技能相关的关键词和返回条数，输出相关的技能内容.
+            # 输出格式
+            - {
+                "document": Skill对象,
+                "l2_distance": LLM生成的查询向量与文档向量之间的L2距离 范围在 0-2 之间 (数值越小表示越相关, 如果大于0.6说明相关度较低)
+            }
+            # 注意
+            - 你应该尽可能具体地描述你想查询的技能，避免过于宽泛的关键词（如“mining”），而应该针对流程中的具体环节进行针对性查询（如“iron ore mining”）。
+            - 如果你发现查询结果的匹配度得分过低（如都低于0.1），则说明你可能没有查询到相关技能
+            """,
+            args_schema=SkillQueryArgs
+        )
         @need_thought
         def query_skill(keyword: str, items: int = 3) -> str:
-            """
-            这是一个你的skill查询工具,你可以通过它查询你已经掌握的技能。输入技能相关的关键词和返回条数，输出相关的技能内容.
-            查询特定的 单一技能。
-            """
-            # 这里的调用会走 Service 层，完美符合 DDD
             return self.knowledges.query_skill(keyword, items)
 
         @tool("expand_path") # 简单参数也可以不写 Schema 类
         @need_thought
-        def expand_path(new_nodes: list[str]):
+        def expand_path(waypoints: list[str]):
             """当需要扩展路径时使用。输入节点描述列表。"""
-            # 这里你应该注入 GoalService 来处理
+            # 这里你应该注入 QuestService 来处理
             return "路径已扩展"
 
-        return {
-            "query_wiki": query_wiki, 
+        self._all_tools = {
+            "query_wiki": query_wiki,
             "query_skill": query_skill,
             "expand_path": expand_path
         }
+
+        return self._all_tools
+    
+    def get_tools(self, tools: list[str]) -> list[tool]:
+        """根据工具名称列表返回工具实例列表"""
+        all_tools = self.all_tools
+        return [all_tools[t] for t in tools if t in all_tools]

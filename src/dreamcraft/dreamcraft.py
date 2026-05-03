@@ -3,66 +3,84 @@ from typing import Dict
 
 from dreamcraft.app.common.messaging import Mailbox
 from dreamcraft.app.orchestrator.action_orchestrator import ActionOrchestrator
-from dreamcraft.app.orchestrator.logic_orchestrator import LogicOrchestrator
+from dreamcraft.app.orchestrator.mission_orchestrator import MissionOrchestrator
+from dreamcraft.app.services.llm_service import LLMService
 from dreamcraft.container import GlobalContainer
 from dreamcraft.infra.repo.skill_repo import SkillRepo
 from dreamcraft.config import settings
-from dreamcraft.app.services.goal_service import GoalService
+from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.app.services.knowledge_service import KnowledgeService
 from dreamcraft.infra.env.mineflayer import MineflayerClient
 from dreamcraft.infra.llm.openai_llm import LLMClient
-from dreamcraft.infra.repo.goal_repo import GoalRepo
+from dreamcraft.infra.repo.quest_repo import QuestRepo
 from dreamcraft.infra.repo.prompt_repo import PromptRepo
 from dreamcraft.infra.repo.wiki_repo import WikiRepo
-from dreamcraft.interface.tools.tool_manager import ToolManager
+from dreamcraft.interface.tool_repo import ToolRepo
 
 def bootstrap():
+    class InfraContainer(GlobalContainer):
+        llm: LLMClient
+        wiki: WikiRepo
+        path: QuestRepo
+        prompt: PromptRepo
+        skill: SkillRepo
+        tool: ToolRepo
+    
+    class ServiceContainer(GlobalContainer):
+        knowledge: KnowledgeService
+
+    class OrchestratorContainer(GlobalContainer):
+        mission: MissionOrchestrator
+        action: ActionOrchestrator
+
+    class AppContainer(GlobalContainer):
+        infra: InfraContainer
+        service: ServiceContainer
+        orchestrator: OrchestratorContainer
+
     # 初始化全局容器和服务
-    container = GlobalContainer()
-
-    llm = LLMClient(settings)
-    wiki = WikiRepo(settings)
-    i_path = GoalRepo(settings)
-    prompt = PromptRepo(settings)
-    skill = SkillRepo(settings)
-
-    infra = GlobalContainer()
-    container.register("infra", infra)
-
-    infra.register("llm", llm)
-    infra.register("wiki", wiki)
-    infra.register("path", i_path)
-    infra.register("prompt", prompt)
-    infra.register("skill", skill)
-
-    knowledge = KnowledgeService(wiki=wiki, llm=llm, skill=skill)
-    s_path = GoalService(goals=i_path)
-    
-    service = GlobalContainer()
-    container.register("service", service)
-
-    tools = ToolManager(knowledge)
-    infra.register("tool", tools)
-
-    logic_inbox = Mailbox()
+    container = AppContainer()
+    infra = InfraContainer()
+    service = ServiceContainer()
+    orchestrator = OrchestratorContainer()
+    mission_inbox = Mailbox()
     action_inbox = Mailbox()
-    logic = LogicOrchestrator(
-        goals=s_path, 
-        llm=llm, 
-        prompt=prompt,
-        inbox=logic_inbox,  # 这里你需要实现一个 Mailbox 类，或者使用现成的消息队列
-        outbox=action_inbox
-    )
-    action = ActionOrchestrator(
-        inbox=action_inbox,
-        outbox=logic_inbox,
-    )
-    
-    service.register("logic", logic)
-    service.register("action", action)
 
-    service.register("knowledge", knowledge)
-    service.register("path", s_path)
+    # 初始化基础设施组件
+    i_llm = LLMClient(settings)
+    i_wiki = WikiRepo(settings)
+    i_quest = QuestRepo(settings)
+    i_prompt = PromptRepo(settings)
+    i_skill = SkillRepo(settings)
+
+    # 初始化服务层组件
+    s_knowledge = KnowledgeService(wiki=i_wiki, llm=i_llm, skill=i_skill)
+    s_quest = QuestService(quests=i_quest)
+
+    # 初始化工具管理器
+    i_tools = ToolRepo(s_knowledge)
+
+    s_llm = LLMService(llm=i_llm, prompt=i_prompt, tool=i_tools)
+
+    # 初始化 Orchestrator
+    o_mission = MissionOrchestrator(quest=s_quest, llm=s_llm, prompt=i_prompt,inbox=mission_inbox,outbox=action_inbox)
+    o_action = ActionOrchestrator(inbox=action_inbox,outbox=mission_inbox)
+
+    container.register("infra", infra)
+    container.register("service", service)
+    container.register("orchestrator", orchestrator)
+    infra.register("llm", i_llm)
+    infra.register("wiki", i_wiki)
+    infra.register("quest", i_quest)
+    infra.register("prompt", i_prompt)
+    infra.register("skill", i_skill)
+    infra.register("tool", i_tools)
+    service.register("knowledge", s_knowledge)
+    service.register("quest", s_quest)
+    service.register("llm", s_llm)
+    orchestrator.register("mission", o_mission)
+    orchestrator.register("action", o_action)
+
     return container
 
 class DreamCraft:

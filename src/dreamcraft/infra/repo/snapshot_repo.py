@@ -4,10 +4,10 @@ import os
 import faiss
 import numpy as np
 
-from dreamcraft.domain.goal_models import GoalMap
+from dreamcraft.domain.quest import Quest
 import pickle
 
-from dreamcraft.domain.snapshot_models import Snapshot
+from dreamcraft.domain.snapshot import Snapshot
 
 
 class snapshotRepo:

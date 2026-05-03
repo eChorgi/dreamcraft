@@ -2,7 +2,7 @@ import json
 import os
 import faiss
 import numpy as np
-from dreamcraft.domain.skill_models import Skill
+from dreamcraft.domain.skill import Skill
 
 class SkillRepo:
     def __init__(self, settings):
@@ -53,10 +53,17 @@ class SkillRepo:
     def save_faiss_index(self, index_path):
         faiss.write_index(self.faiss_index, str(index_path))
     
-    def query(self, query_embedding, top_k=3) -> list[Skill]:
+    def query(self, query_embedding, top_k=3) -> list[dict]:
         actual_k = min(top_k, len(self.skills))
         distances, indices = self.faiss_index.search(query_embedding, actual_k)
-        return [self.skills[i] for i in indices[0]]
+        return [
+            {
+                "document": self.skills[i],
+                "l2_distance": distances[0][j]
+            }
+            for j, i in enumerate(indices[0])
+            if i != -1  # FAISS 在搜索结果不足时会返回 -1，建议过滤掉
+        ]
 
     def add(self, skill: Skill, skill_embedding: np.ndarray):
         """添加新技能到知识库，并更新 FAISS 索引和文档列表"""

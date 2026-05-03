@@ -1,6 +1,6 @@
 from typing import Dict
 from dreamcraft.config import settings
-from dreamcraft.app.services.goal_service import GoalService
+from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.infra.env.mineflayer import MineflayerClient
 from dreamcraft.infra.llm.openai_llm import LLMClient
 
@@ -26,9 +26,6 @@ class GlobalContainer:
             return self.get(name)
         except KeyError:
             raise AttributeError(f"'{name}' not found in container")
-
-# 唯一的全局入口
-container = GlobalContainer()
 
 # class AppContainer:
 #     """应用容器，负责管理应用中的各种服务和组件"""

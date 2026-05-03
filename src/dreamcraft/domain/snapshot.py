@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 from typing import Dict, List
+import json
+
+from pydantic import TypeAdapter, ValidationError
 
 
 @dataclass
@@ -23,3 +26,18 @@ class Snapshot:
             "voxels": self.voxels,
             "description": self.description
         }
+    
+    @property
+    def json(self):
+        return json.dumps(self.dict, ensure_ascii=False)
+
+    @staticmethod
+    def parse(json_str: str) -> 'Snapshot':
+        adapter = TypeAdapter(Snapshot)
+        try:
+            data = json.loads(json_str)
+            snapshot = adapter.validate_python(data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            print(f"⚠️ JSON 解析错误: {e}")
+            return None
+        return snapshot
