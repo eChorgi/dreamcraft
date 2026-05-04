@@ -58,7 +58,7 @@ class SkillRepo:
         distances, indices = self.faiss_index.search(query_embedding, actual_k)
         return [
             {
-                "document": self.skills[i],
+                "skill": self.skills[i],
                 "l2_distance": distances[0][j]
             }
             for j, i in enumerate(indices[0])

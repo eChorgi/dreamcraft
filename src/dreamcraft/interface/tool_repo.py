@@ -65,6 +65,9 @@ class ToolRepo:
         self.knowledges = knowledges
         self._all_tools = None  # 用于缓存工具实例的字典
 
+    def __getitem__(self, key: str) -> tool:
+        return self.get_tools([key])[0]
+
     @property
     def all_tools(self) -> dict[str, tool]:
         """
@@ -89,7 +92,7 @@ class ToolRepo:
             ```
             # 注意
              - 你应该尽可能具体地描述你想查询的内容，避免过于宽泛的关键词（如“enchanting”），而应该针对流程中的具体环节进行针对性查询（如“enchanting table”）。
-             - 如果你发现查询结果的匹配度得分过低（如都低于0.1），则说明你可能没有查询到相关内容
+             - 如果你发现查询结果的L2距离过高（如都大于0.6），则说明你可能没有查询到相关内容
             """, 
             args_schema=WikiQueryArgs)
         @need_thought
@@ -105,12 +108,12 @@ class ToolRepo:
             - 这是一个你的skill查询工具,你可以通过它查询你已经掌握的技能。输入技能相关的关键词和返回条数，输出相关的技能内容.
             # 输出格式
             - {
-                "document": Skill对象,
+                "skill": Skill对象,
                 "l2_distance": LLM生成的查询向量与文档向量之间的L2距离 范围在 0-2 之间 (数值越小表示越相关, 如果大于0.6说明相关度较低)
             }
             # 注意
             - 你应该尽可能具体地描述你想查询的技能，避免过于宽泛的关键词（如“mining”），而应该针对流程中的具体环节进行针对性查询（如“iron ore mining”）。
-            - 如果你发现查询结果的匹配度得分过低（如都低于0.1），则说明你可能没有查询到相关技能
+            - 如果你发现查询结果的L2距离过高（如都大于0.6），则说明你可能没有查询到相关技能
             """,
             args_schema=SkillQueryArgs
         )
@@ -124,15 +127,38 @@ class ToolRepo:
             """当需要扩展路径时使用。输入节点描述列表。"""
             # 这里你应该注入 QuestService 来处理
             return "路径已扩展"
+    
+        @tool("update_summary")
+        @need_thought
+        def update_summary(summary: str):
+            """当需要更新总结时使用。输入前面所有对话记录的总结文本。"""
+            return summary
+        
+        @tool("grep_wiki_files")
+        @need_thought
+        def grep_wiki_files(pattern: str, max_results: int = 5):
+            return self.knowledges.grep_wiki_files(pattern, max_results)
+        
+        @tool("read_wiki_section")
+        @need_thought
+        def read_wiki_section(file_name: str, section_title: str):
+            return self.knowledges.read_wiki_section(file_name, section_title)
 
+
+
+
+    
         self._all_tools = {
             "query_wiki": query_wiki,
             "query_skill": query_skill,
-            "expand_path": expand_path
+            "expand_path": expand_path,
+            "update_summary": update_summary,
+            "grep_wiki_files": grep_wiki_files,
+            "read_wiki_section": read_wiki_section
         }
-
         return self._all_tools
     
+
     def get_tools(self, tools: list[str]) -> list[tool]:
         """根据工具名称列表返回工具实例列表"""
         all_tools = self.all_tools

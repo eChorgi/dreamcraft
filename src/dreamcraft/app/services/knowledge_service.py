@@ -35,3 +35,9 @@ class KnowledgeService:
     
     def get_skill(self, ref):
         return self.skill.get(ref)
+    
+    def grep_wiki_files(self, pattern: str, max_results: int = 5) -> list[dict]:
+        return self.wiki.grep_files(pattern, max_results)
+    
+    def read_wiki_section(self, file_name: str, section_title: str) -> str:
+        return self.wiki.read_section(file_name, section_title)

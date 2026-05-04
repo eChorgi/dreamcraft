@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     mineflayer_port: int = 3000
     mineflayer_request_timeout: int = 600
     wiki_documents_path: Path = WIKI_DIR / "wiki_documents.json"
+    wiki_md_path: Path = WIKI_DIR / "md"
     wiki_faiss_index_path: Path = WIKI_DIR / "wiki_faiss.index"
     skill_documents_path: Path = SKILL_DIR / "skill_documents.json"
     skill_faiss_index_path: Path = SKILL_DIR / "skill_faiss.index"

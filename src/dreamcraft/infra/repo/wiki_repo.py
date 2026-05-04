@@ -1,14 +1,18 @@
 import json
+import pathlib
+import re
 import faiss
 import numpy as np
 
 from dreamcraft.domain.wiki import WikiDocument
+from dreamcraft.infra.utils import grep
 
 
 class WikiRepo:
     def __init__(self, settings):
         self.documents:list[WikiDocument] = self.load_documents_from_json(settings.wiki_documents_path)
         self.faiss_index = self.load_faiss_index(settings.wiki_faiss_index_path)
+        self.md_path = settings.wiki_md_path
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -37,3 +41,14 @@ class WikiRepo:
             for j, i in enumerate(indices[0])
             if i != -1  # FAISS 在搜索结果不足时会返回 -1，建议过滤掉
         ]
+
+    def grep_files(self, pattern: str, max_results: int = -1) -> list[dict]:
+        return grep.grep_files(pattern, self.md_path, "*.md", max_results)
+
+    def read_section(self, file_name: str, section_title: str) -> str:
+        """根据章节标题读取对应的内容，适用于章节标题唯一的情况"""
+        if not file_name.endswith(".md"):
+            file_name += ".md"
+        if " " in file_name:
+            file_name = file_name.replace(" ", "_")
+        return grep.read_md_section(self.md_path / file_name, section_title)

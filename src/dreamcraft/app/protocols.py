@@ -22,6 +22,10 @@ class IQuestRepo(Protocol):
 class IWikiRepo(Protocol):
     def query(self, query_embedding, top_k=3) -> list[dict]:
         ...
+    def grep_files(self, pattern: str, max_results: int = -1) -> list[dict]:
+        ...
+    def read_section(self, file_name: str, section_title: str) -> str:
+        ...
 
 class ISkillRepo(Protocol):
     def query(self, query_embedding, top_k=3) -> list[dict]:
@@ -48,6 +52,8 @@ class IPromptRepo(Protocol):
         ...
 
 class IToolRepo(Protocol):
+    def __getitem__(self, key: str) -> tool:
+        ...
     @property
     def all_tools(self) -> dict[str, tool]:
         ...
