@@ -28,7 +28,6 @@ class KnowledgeService:
         query_embedding = self.llm.embed(keyword)
         return self.skill.query(query_embedding, top_k=items)
     
-
     def add_skill(self, skill):
         skill_embedding = self.llm.embed(skill.summary).reshape(1, -1).astype('float32')
         self.skill.add(skill, skill_embedding)

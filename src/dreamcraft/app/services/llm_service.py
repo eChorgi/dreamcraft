@@ -5,7 +5,7 @@ from rich import print as rprint
 
 import concurrent
 
-from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IToolRepo
+from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, IToolRepo
 from langchain.tools import tool
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 
@@ -15,10 +15,11 @@ from dreamcraft.domain.snapshot import Snapshot
 class LLMService:
     """负责与 LLM 进行交互的服务类，提供一个统一的接口供 Orchestrator 调用"""
     
-    def __init__(self, llm: ILLMClient, prompt: IPromptRepo, tool: IToolRepo):
+    def __init__(self, llm: ILLMClient, prompt: IPromptRepo, tool: IToolRepo, quest: IQuestRepo):
         self.llm = llm
         self.prompt = prompt
         self.tool = tool
+        self.quest = quest
 
     def react(
         self, 
@@ -37,6 +38,7 @@ class LLMService:
         tool_dict = {t.name: t for t in tools}
         total_tokens = 0
         cached_tokens = 0
+        reason = ""
 
         messages = history_messages if history_messages is not None else []
         if messages and not isinstance(messages[0], SystemMessage):
@@ -75,6 +77,9 @@ class LLMService:
                     if parsed_result is not None:
                         print(f"完整的交互历史: {rprint(messages)}")    
                         print(f"提取到的最终答案是: {parsed_result}")
+                        if "【Reason】" in ai_msg.content:
+                            reason = ai_msg.content.split("【Reason】")[-1].split("【Final Answer】")[0].strip()
+                            print(f"LLM 给出的理由是: {reason}")
                         break
                     
                     messages.append(HumanMessage(content=f"⚠️ 系统拦截：你的回答严重违规! {error_msg}"))
@@ -117,7 +122,7 @@ class LLMService:
                         print(f"  ❌ 工具 '{tool_call['name']}' 执行失败: {e}")
                     
                     # 将结果存入字典，key使用tool_call_id，方便后续按原顺序组装
-                    if tool_call["name"] == "update_summary":
+                    if tool_call["name"] == "summary":
                         summary_content = observation
                         if current_iteration > 0:
                             print(f"  📝 提取到摘要内容: {observation}")
@@ -134,7 +139,7 @@ class LLMService:
                     content=clean_obs,
                     tool_call_id=tool_call["id"]
                 ))
-            print(f"完整的交互历史: {rprint(messages)}")
+            rprint(messages)
             # 3. 处理上下文压缩 (在完整的对话回合结束时进行)
             if summary_content and current_iteration > 0:
                 len_sum = sum(len(m.content) for m in messages if hasattr(m, 'content') and m.content)
@@ -162,7 +167,8 @@ class LLMService:
         print(f"其中 {cached_tokens} tokens 来自上下文缓存，{total_tokens - cached_tokens} tokens 来自本次输入。")
         return {
             "result": parsed_result,
-            "messages": messages
+            "messages": messages,
+            "reason": reason
         }
     
 
@@ -190,7 +196,7 @@ class LLMService:
             ),
             parser = parse_bool,
             error_msg="请直接明确回复 'True' 或 'False'，不要输出其他内容。",
-            tools = ["query_wiki", "query_skill", "grep_wiki_files", "read_wiki_section"] + (["update_summary"] if enable_context_compression else []),
+            tools = ["query_wiki", "query_skill", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
             max_iterations = max_iterations,
             max_retries = max_retries,
         )
@@ -214,7 +220,7 @@ class LLMService:
             ),
             parser=Snapshot.parse,
             error_msg=f"请严格按照 JSON 格式输出完整信息。**参考格式**:\n{Snapshot.schema}",
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["update_summary"] if enable_context_compression else []),
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
             max_iterations = max_iterations,
             max_retries= max_retries,
         )
@@ -234,7 +240,7 @@ class LLMService:
                 enable_context_compression=enable_context_compression
             ),
             error_msg=f"请直接回复你的回答，不要输出任何多余的文本。",
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["update_summary"] if enable_context_compression else []),
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
             max_iterations = max_iterations,
             max_retries= max_retries,
             enable_context_compression=enable_context_compression
@@ -271,37 +277,68 @@ class LLMService:
             ),
             error_msg=f"请严格按照每行一个[步骤名称]:[动作指令]的格式输出一个子目标列表。",
             parser=parse,
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["update_summary"] if enable_context_compression else []),
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
             max_iterations = max_iterations,
             max_retries= max_retries,
         )
         if response["result"][-1].line == (target.line if isinstance(target, Waypoint) else target):
             response["result"] = response["result"][:-1]
         return response["result"]
-    # def try_expand(self, completed: list[Waypoint | str], target: Waypoint | str, max_iterations: int = 10, max_retries: int = 3):
-    #     messages = []
-    #     tools = self.tool.get_tools(["query_wiki"])
+    
+    def navigate(
+        self,
+        target: Waypoint, 
+        snapshot: Snapshot, 
+        max_iterations: int = 10, 
+        max_retries: int = 5, 
+        enable_context_compression: bool = True
+    ) -> Waypoint | None:
+        def parse(ind: int) -> Waypoint | None:
+            if ind is None:
+                return None
+            if isinstance(ind, str):
+                ind = ind.strip()
+                if not ind.isdigit():
+                    return None
+                ind = int(ind)
+            return self.quest.get_waypoint(ind)
+        response = self.react(
+            prompt = self.prompt.navigate(
+                snapshot = snapshot,
+                target = target.details if isinstance(target, Waypoint) else target,
+                enable_context_compression=enable_context_compression
+            ),
+            error_msg=f"请直接输出一个数字表示要选择的节点!",
+            parser=parse,
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section", "get_next_waypoints"] + (["summary"] if enable_context_compression else []),
+            max_iterations = max_iterations,
+            max_retries= max_retries,
+        )
+        return response["result"]
+    
+    def check_granularity(
+        self, 
+        target: Waypoint | str, 
+        snapshot: Snapshot, 
+        max_iterations: int = 10, 
+        max_retries: int = 5, 
+        enable_context_compression: bool = True
+        ) -> bool:
+        def parse_bool(text):
+            if "True" in text: return True
+            if "False" in text: return False
+            return None
 
-    #     while True:
-    #         response = self.react(
-    #             prompt = self.prompt.try_expand(
-    #                 completed = completed,
-    #                 target = target,
-    #             ),
-    #             tools = tools,
-    #             max_iterations = max_iterations,
-    #             history_messages = messages
-    #         )
-    #         messages = response["messages"]
-    #         result = response["result"]
-    #         # 解析 response，判断是否可行
-    #         ss = Snapshot.parse(result)
-    #         if ss:
-    #             return ss
-    #         else:
-    #             error_count += 1
-    #             messages.append(HumanMessage(content="⚠️ 系统拦截：你的回答格式严重违规！请严格按照 JSON 格式输出想象状态的完整信息，确保包含所有必要字段。"))
-    #             if error_count >= max_retries:
-    #                 print("⚠️ 连续三次格式错误，强行终止可行性检查，默认返回 False。")
-    #                 return False
-    #             continue
+        response = self.react(
+            prompt = self.prompt.granularity_check(
+                target = target,
+                snapshot = snapshot,
+                enable_context_compression=enable_context_compression
+            ),
+            parser = parse_bool,
+            error_msg="请直接明确回复 'True' 或 'False'，不要输出其他内容。",
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
+            max_iterations = max_iterations,
+            max_retries = max_retries,
+        )
+        return response["result"]

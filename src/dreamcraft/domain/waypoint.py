@@ -1,3 +1,4 @@
+import json
 from typing import TYPE_CHECKING, Union
 from dreamcraft.domain.snapshot import Snapshot
 
@@ -5,7 +6,7 @@ if TYPE_CHECKING:
     from dreamcraft.domain.quest import Quest  # 只有在静态检查时才导入
     
 class Waypoint:
-    def __init__(self, name, next = None, description = None, imaginated_snapshot: Snapshot = None, actual_snapshot: Snapshot = None):
+    def __init__(self, name, next:list['Waypoint'] = None, description = None, imaginated_snapshot: Snapshot = None, actual_snapshot: Snapshot = None):
         # 基础属性
         #   节点名称
         self.name = name
@@ -16,14 +17,14 @@ class Waypoint:
         #   节点想象与实际状态
         self.imaginated_snapshot = imaginated_snapshot
         self.actual_snapshot = actual_snapshot
-        #   节点可行性
-        self.is_feasible: bool = None
-        self.dead_ends: dict[Waypoint, str] = {} # 记录不可行的子节点以及对应的失败原因
+        #   通路可行性
+        self.failed_paths: dict[Waypoint, str] = {} # 记录不可行的子节点以及对应的失败原因
+
 
                
         # 内部属性
         #   拓扑结构
-        self.next = set(next) if next else set()
+        self.next = set(next) if next else set[Waypoint]()
         for waypoint in self.next:
             waypoint.prev.add(self)
         self.prev = set()
@@ -48,6 +49,20 @@ class Waypoint:
         if self.description:
             string += f" : {self.description}"
         return string
+    
+    @property
+    def details(self):
+        _dict = {
+            "ind": self.ind,
+            "name": self.name,
+        }
+        if self.description:
+            _dict["description"] = self.description
+        if self.imaginated_snapshot:
+            _dict["imaginated_snapshot"] = self.imaginated_snapshot.details
+        if self.actual_snapshot:
+            _dict["actual_snapshot"] = self.actual_snapshot.details
+        return _dict
 
     def branch_to(self, waypoint):
         """

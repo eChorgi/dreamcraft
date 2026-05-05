@@ -2,11 +2,11 @@ import json
 
 
 class Skill:
-    def __init__(self, name: str, description: str = None, impact: str = None, dependency: list["Skill"] = None, javascript: str = None):
+    def __init__(self, name: str, description: str = None, impact: str = None, dependency: list["Skill"] = None, function: str = None):
         self.name = name
         self.description = description
         self.impact = impact
-        self.javascript = javascript
+        self.function = function
         self.dependency = dependency if dependency else []
     
     def __repr__(self):
@@ -26,13 +26,21 @@ class Skill:
 
     @property
     def summary(self):
-        _sum = """## 标识符
+        if not self.impact:
+            _sum = """### Identifier
 {name}
-
-## 功能简述
+### Description
 {description}
-
-## 作用效果
+        """.format(
+            name=self.name,
+            description=self.description
+        )
+        else:
+            _sum = """### Identifier
+{name}
+### Description
+{description}
+### Impact
 {impact}
         """.format(
             name=self.name,
@@ -47,7 +55,7 @@ class Skill:
             "name": self.name,
             "description": self.description,
             "impact": self.impact,
-            "javascript": self.javascript,
+            "function": self.function,
             "dependency": [d.name for d in self.dependency]
         }
         

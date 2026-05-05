@@ -76,3 +76,27 @@ class PromptRepo:
             enable_context_compression=enable_context_compression
         )
         return prompt
+    
+    def navigate(self, target: Waypoint, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
+        """专门用于生成路径导航的 prompt 模板"""
+        prompt = self.react(
+            role = self.load("navigate_role"),
+            query = self.load("navigate_query").format(
+                target = target.details if isinstance(target, Waypoint) else target,
+                snapshot = snapshot.json
+            ),
+            enable_context_compression=enable_context_compression
+        )
+        return prompt
+    
+    def granularity_check(self, target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
+        """专门用于生成粒度检查的 prompt 模板"""
+        prompt = self.react(
+            role = self.load("granularity_check_role"),
+            query = self.load("granularity_check_query").format(
+                target = target.details if isinstance(target, Waypoint) else target,
+                snapshot = snapshot.json
+            ),
+            enable_context_compression=enable_context_compression
+        )
+        return prompt

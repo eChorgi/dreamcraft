@@ -1,3 +1,5 @@
+import json
+
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, create_model
 from dreamcraft.app.services.knowledge_service import KnowledgeService
@@ -5,6 +7,8 @@ from dreamcraft.app.services.knowledge_service import KnowledgeService
 import inspect
 from functools import wraps
 from pydantic import Field
+
+from dreamcraft.app.services.quest_service import QuestService
 
 def need_thought(func):
     # 1. 获取原有的签名和注解
@@ -62,12 +66,18 @@ class ThoughtToolArgs(BaseModel):
         )
 
 class ToolRepo:
-    def __init__(self, knowledges: KnowledgeService):
+    def __init__(self, knowledges: KnowledgeService, quest: QuestService):
         self.knowledges = knowledges
+        self.quest = quest
         self._all_tools = None  # 用于缓存工具实例的字典
 
     def __getitem__(self, key: str) -> tool:
         return self.get_tools([key])[0]
+
+    def get_tools(self, tools: list[str]) -> list[tool]:
+        """根据工具名称列表返回工具实例列表"""
+        all_tools = self.all_tools
+        return [all_tools[t] for t in tools if t in all_tools]
 
     @property
     def all_tools(self) -> dict[str, tool]:
@@ -141,18 +151,18 @@ class ToolRepo:
                 str_list.append(f"{{\nskill: {r['skill'].json},\nl2_distance: {l2_dist:.2f}\n}}")
             return "[\n"+"\n".join(str_list)+"\n]"
 
-        @tool("expand_path") # 简单参数也可以不写 Schema 类
-        @need_thought
-        def expand_path(waypoints: list[str]):
-            """当需要扩展路径时使用。输入节点描述列表。"""
-            # 这里你应该注入 QuestService 来处理
-            return "路径已扩展"
+        # @tool("expand_path") # 简单参数也可以不写 Schema 类
+        # @need_thought
+        # def expand_path(waypoints: list[str]):
+        #     """当需要扩展路径时使用。输入节点描述列表。"""
+        #     # 这里你应该注入 QuestService 来处理
+        #     return "路径已扩展"
         
-        @tool("update_summary")
+        @tool("summary")
         @need_thought
-        def update_summary(summary: str):
+        def summary(s: str):
             """当需要更新总结时使用。输入前面所有对话记录的总结文本。"""
-            return summary
+            return s
         
         @tool("grep_wiki_files",description=
 """
@@ -182,37 +192,71 @@ class ToolRepo:
         
 
         @tool("read_wiki_section",
-              description=
+            description=
 """
 # 功能：根据给定的文件名和章节标题，提取该章节下完整的 Markdown 内容（含子章节）。
 # 使用逻辑：
 	1. 深挖细节：当 grep_wiki_files 发现了关键线索（如某个行号或片段），但该片段信息不足以支撑决策时，调用此工具读取该行所属的完整 Section。
 	2. 获取机制：当需要了解某个具体机制（如“如何合成石镐”或“僵尸的掉落逻辑”）时，直接读取对应的标题块。
-注意：
-•	file_name 文件名, 必须包含扩展名（如 Zombie.md）。
-•	section_title 应当是 grep 结果中 heading_hierarchy 列表中的元素。
-"""
-              )
+""",
+            args_schema=ThoughtToolArgs.extend(
+                "ReadWikiSectionArgs",
+                file_name=(str, "Markdown文件名，必须包含扩展名"),
+                section_title=(str, "章节标题，必须与 grep_wiki_files 返回的 heading_hierarchy 中的标题完全匹配"))
+            )
         @need_thought
         def read_wiki_section(file_name: str, section_title: str):
             return self.knowledges.read_wiki_section(file_name, section_title)
 
 
-
+        @tool("get_next_waypoints",description=
+"""
+# 简短摘要 (Summary)
+获取某个节点的后续任务的详细信息
+**注意**
+- 返回的节点是查询节点后续要进行的下游节点列表
+""",
+            args_schema=ThoughtToolArgs.extend(
+                "GetNextWaypointsArgs",
+                ind=(int, "节点索引"),
+                depth=(int, "查询递归深度, 尽可能小的值（如1或2），以避免信息过载")
+            )
+        )
+        @need_thought
+        def get_next_waypoints(ind: int, depth: int = 2):
+            st = set([ind])
+            def _get_next(waypoint, current_depth = 0):
+                st.add(waypoint.ind)
+                if current_depth >= depth:
+                    return 
+                for next_wp in waypoint.next:
+                    _get_next(next_wp, current_depth + 1)
+            _get_next(self.quest.get_waypoint(ind))
+            # def _get_next(ind, depth, current_depth=0) -> dict:
+            #     if current_depth >= depth:
+            #         return [x.details for x in self.quest.get_waypoint(ind).next]
+            #     waypoints = self.quest.get_waypoint(ind).next
+            #     result = []
+            #     for wp in waypoints:
+            #         d = wp.details
+            #         if len(wp.next) > 0 and current_depth + 1 < depth:
+            #             d["next"] = _get_next(wp.ind, depth, current_depth + 1)
+            #         result.append(d)
+            #     return result
+            # return _get_next(ind, depth)
+            result = [self.quest.get_waypoint(i).details for i in st]
+            for r in result:
+                r["next"] = [n.ind for n in self.quest.get_waypoint(r["ind"]).next]
+            return result
 
     
         self._all_tools = {
             "query_wiki": query_wiki,
             "query_skill": query_skill,
-            "expand_path": expand_path,
-            "update_summary": update_summary,
+            # "expand_path": expand_path,
+            "summary": summary,
             "grep_wiki_files": grep_wiki_files,
-            "read_wiki_section": read_wiki_section
+            "read_wiki_section": read_wiki_section,
+            "get_next_waypoints": get_next_waypoints
         }
         return self._all_tools
-    
-
-    def get_tools(self, tools: list[str]) -> list[tool]:
-        """根据工具名称列表返回工具实例列表"""
-        all_tools = self.all_tools
-        return [all_tools[t] for t in tools if t in all_tools]

@@ -22,8 +22,7 @@ class Quest:
                 name=waypoint.name,
                 description=waypoint.description,
                 imaginated_snapshot=waypoint.imaginated_snapshot,
-                actual_snapshot=waypoint.actual_snapshot,
-                feasibility=waypoint.is_feasible
+                actual_snapshot=waypoint.actual_snapshot
             )
             mapping[waypoint] = new_waypoint
             for next_waypoint in waypoint.next:
@@ -183,7 +182,7 @@ class Quest:
         
         self.index_waypoints()
 
-    def get_waypoint(self, ref: Waypoint | int | str) -> Waypoint:
+    def get_waypoint(self, ref: Waypoint | int | str) -> Waypoint|None:
         """
         辅助函数：根据引用解析出 Waypoint 对象
         解析规则：
@@ -196,7 +195,7 @@ class Quest:
         
         if isinstance(ref, int):
             if ref >= len(self.waypoints) or ref < -1:
-                raise ValueError(f"节点索引 {ref} 超出{self}的范围 [0, {len(self.waypoints) - 1}]")
+                return None
             if ref == -1:
                 return self.target
             return self.waypoints[ref]
@@ -205,7 +204,7 @@ class Quest:
             for waypoint in self.waypoints:
                 if waypoint.name == ref:
                     return waypoint
-            raise ValueError(f"在 {self} 中未找到名称为 '{ref}' 的节点")
+            return None
         
         raise TypeError("ref 必须是 Waypoint 对象、整数索引或字符串名称")
     
