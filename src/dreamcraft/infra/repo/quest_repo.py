@@ -1,4 +1,5 @@
-from dreamcraft.domain.quest import Quest, Waypoint
+from dreamcraft.domain.quest import Quest
+from dreamcraft.domain.waypoint import Waypoint
 import pickle
 
 

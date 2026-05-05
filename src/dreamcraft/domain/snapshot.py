@@ -13,7 +13,7 @@ class Snapshot:
     hunger: int
     entities: List[str]
     voxels: List[str]
-    description: str
+    extra_info: str
     
     @property
     def dict(self):
@@ -24,12 +24,28 @@ class Snapshot:
             "hunger": self.hunger,
             "entities": self.entities,
             "voxels": self.voxels,
-            "description": self.description
+            "extra_info": self.extra_info
         }
     
     @property
     def json(self):
         return json.dumps(self.dict, ensure_ascii=False)
+    
+    @property
+    @staticmethod
+    def schema() -> str:
+        return json.dumps({
+            "type": "object",
+            "properties": {
+                "inventory": {"type": "object", "additionalProperties": {"type": "integer"}},
+                "equipment": {"type": "object", "additionalProperties": {"type": "string"}},
+                "health": {"type": "integer"},
+                "hunger": {"type": "integer"},
+                "entities": {"type": "array", "items": {"type": "string"}},
+                "voxels": {"type": "array", "items": {"type": "string"}},
+                "extra_info": {"type": "string"}
+            },
+        }, ensure_ascii=False)
 
     @staticmethod
     def parse(json_str: str) -> 'Snapshot':
@@ -51,5 +67,5 @@ class Snapshot:
             hunger=20,
             entities=[],
             voxels=[],
-            description=""
+            extra_info=""
         )

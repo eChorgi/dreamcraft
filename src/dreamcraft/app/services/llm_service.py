@@ -1,5 +1,7 @@
 import json
+import re
 from typing import List, Union
+from rich import print as rprint    
 
 import concurrent
 
@@ -7,7 +9,7 @@ from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IToolRepo
 from langchain.tools import tool
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 
-from dreamcraft.domain.quest import Waypoint
+from dreamcraft.domain.waypoint import Waypoint
 from dreamcraft.domain.snapshot import Snapshot
 
 class LLMService:
@@ -24,18 +26,17 @@ class LLMService:
         tools: List[Union[tool, str]],
         parser: callable = lambda x: x,  # 默认 parser 是一个简单的身份函数，直接返回原始字符串 
         error_msg: str = "请在【Final Answer】后面严格按照要求的格式输出你的回答！",
-        max_iterations: int = 5, 
-        max_retries: int = 3,
+        max_iterations: int = 10, 
+        max_retries: int = 5,
         history_messages: list = None,
-        enable_context_compression: bool = True
     ) -> dict:
         """核心功能：根据输入的 query 进行思考、工具调用、观察结果、再思考的循环"""
         
         tools = [self.tool.all_tools[t] if isinstance(t, str) else t for t in tools]
-        if enable_context_compression:
-            tools.append(self.tool["update_summary"])
         llm_with_tools = self.llm.with_tools(tools)
         tool_dict = {t.name: t for t in tools}
+        total_tokens = 0
+        cached_tokens = 0
 
         messages = history_messages if history_messages is not None else []
         if messages and not isinstance(messages[0], SystemMessage):
@@ -60,6 +61,10 @@ class LLMService:
             # 1. 把全套历史记录喂给 LLM
             ai_msg = llm_with_tools.invoke(messages)
             messages.append(ai_msg) # 把 LLM 的回复（不管是不是工具调用）记录到历史中
+            token_usage = ai_msg.response_metadata.get("token_usage", 0)
+            prompt_tokens_details = token_usage.get("prompt_tokens_details", {})
+            total_tokens += token_usage.get("total_tokens", 0)
+            cached_tokens += prompt_tokens_details.get("cached_tokens", 0)
             # 2. 判断是否还需要调用工具
             if not ai_msg.tool_calls:
                 # 没有 tool_calls 说明 LLM 认为信息已经充足，输出了最终答案
@@ -68,6 +73,7 @@ class LLMService:
                     parsed_result = parser(result)
                     
                     if parsed_result is not None:
+                        print(f"完整的交互历史: {rprint(messages)}")    
                         print(f"提取到的最终答案是: {parsed_result}")
                         break
                     
@@ -111,23 +117,24 @@ class LLMService:
                         print(f"  ❌ 工具 '{tool_call['name']}' 执行失败: {e}")
                     
                     # 将结果存入字典，key使用tool_call_id，方便后续按原顺序组装
-                    tool_results_dict[tool_call["id"]] = observation
-
                     if tool_call["name"] == "update_summary":
                         summary_content = observation
                         if current_iteration > 0:
                             print(f"  📝 提取到摘要内容: {observation}")
                         else:
-                            observation = "第一轮不使用摘要内容"
+                            observation = "第一轮没有摘要内容"
+                    tool_results_dict[tool_call["id"]] = observation
 
 
             # 2. 严格按照 ai_msg.tool_calls 的原始顺序，把 ToolMessage 加入到消息列表
             for tool_call in ai_msg.tool_calls:
                 obs = tool_results_dict[tool_call["id"]]
+                clean_obs = obs.replace("\'", '"').strip() if isinstance(obs, str) else str(obs)
                 messages.append(ToolMessage(
-                    content=str(obs),
+                    content=clean_obs,
                     tool_call_id=tool_call["id"]
                 ))
+            print(f"完整的交互历史: {rprint(messages)}")
             # 3. 处理上下文压缩 (在完整的对话回合结束时进行)
             if summary_content and current_iteration > 0:
                 len_sum = sum(len(m.content) for m in messages if hasattr(m, 'content') and m.content)
@@ -139,7 +146,7 @@ class LLMService:
                     content_to_keep = messages[-len_to_keep:]  # 只保留最新一轮工具调用及其结果
                     messages = [
                         SystemMessage(content=new_system_prompt),
-                        HumanMessage(content="请根据全局摘要记忆继续执行你的任务。"), # 维持阵型的常驻提示
+                        # HumanMessage(content="请根据全局摘要记忆继续执行你的任务。"), # 维持阵型的常驻提示
                     ] + content_to_keep
 
             current_iteration += 1
@@ -151,9 +158,8 @@ class LLMService:
             print("⚠️ 连续多次格式错误，强行终止循环")
             parsed_result = None
 
-        total_tokens = sum(len(m.content) for m in messages)
-        print(f"本次交互预估使用了 {total_tokens} tokens。")
-        print(f"完整的交互历史: {messages}")
+        print(f"本次交互使用了 {total_tokens} tokens。")
+        print(f"其中 {cached_tokens} tokens 来自上下文缓存，{total_tokens - cached_tokens} tokens 来自本次输入。")
         return {
             "result": parsed_result,
             "messages": messages
@@ -166,8 +172,8 @@ class LLMService:
         completed: list[Waypoint | str], 
         target: Waypoint | str, 
         snapshot: Snapshot, 
-        max_iterations: int = 5, 
-        max_retries: int = 3, 
+        max_iterations: int = 10, 
+        max_retries: int = 5, 
         enable_context_compression: bool = True
         ) -> bool:
         def parse_bool(text):
@@ -179,14 +185,14 @@ class LLMService:
             prompt = self.prompt.feasibility_check(
                 completed = completed,
                 target = target,
-                snapshot = snapshot
+                snapshot = snapshot,
+                enable_context_compression=enable_context_compression
             ),
             parser = parse_bool,
             error_msg="请直接明确回复 'True' 或 'False'，不要输出其他内容。",
-            tools = ["query_wiki", "query_skill"],
+            tools = ["query_wiki", "query_skill", "grep_wiki_files", "read_wiki_section"] + (["update_summary"] if enable_context_compression else []),
             max_iterations = max_iterations,
             max_retries = max_retries,
-            enable_context_compression=enable_context_compression
         )
         return response["result"]
 
@@ -195,27 +201,84 @@ class LLMService:
         completed: list[Waypoint | str], 
         target: Waypoint | str, 
         snapshot: Snapshot, 
-        max_iterations: int = 5, 
-        max_retries: int = 3, 
+        max_iterations: int = 10, 
+        max_retries: int = 5, 
         enable_context_compression: bool = True
     ) -> Snapshot:
         response = self.react(
             prompt = self.prompt.imaginate(
                 completed = completed,
                 target = target,
-                snapshot = snapshot
+                snapshot = snapshot,
+                enable_context_compression=enable_context_compression
             ),
             parser=Snapshot.parse,
-            error_msg="""请严格按照 JSON 格式输出完整信息。""",
-            tools = ["query_wiki"],
+            error_msg=f"请严格按照 JSON 格式输出完整信息。**参考格式**:\n{Snapshot.schema}",
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["update_summary"] if enable_context_compression else []),
+            max_iterations = max_iterations,
+            max_retries= max_retries,
+        )
+        return response["result"]
+    
+    def chat(
+        self, 
+        query: str, 
+        max_iterations: int = 10, 
+        max_retries: int = 5, 
+        enable_context_compression: bool = True
+    ) -> str:
+        response = self.react(
+            prompt = self.prompt.react(
+                role="你是一个 Minecraft 游戏聊天助手，负责与玩家进行对话，提供游戏内的帮助和建议。",
+                query = query,
+                enable_context_compression=enable_context_compression
+            ),
+            error_msg=f"请直接回复你的回答，不要输出任何多余的文本。",
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["update_summary"] if enable_context_compression else []),
             max_iterations = max_iterations,
             max_retries= max_retries,
             enable_context_compression=enable_context_compression
         )
         return response["result"]
-            
 
-    # def try_expand(self, completed: list[Waypoint | str], target: Waypoint | str, max_iterations: int = 5, max_retries: int = 3):
+    def expand_path(
+        self,
+        completed: list[Waypoint | str], 
+        target: Waypoint | str, 
+        snapshot: Snapshot, 
+        max_iterations: int = 10, 
+        max_retries: int = 5, 
+        enable_context_compression: bool = True
+    ) -> list[Waypoint] | None:
+        def parse(text) -> list[Waypoint] | None:
+            text_lines = text.strip().split("\n")
+            waypoints = []
+            for line in text_lines:
+                if not line.strip():
+                    continue
+                if ":" not in line:
+                    waypoints.append(Waypoint(name=line.strip()))
+                    continue
+                name, action = line.split(":", 1)
+                waypoints.append(Waypoint(name=name.strip(), description=action.strip()))
+            return waypoints    
+        response = self.react(
+            prompt = self.prompt.expand_path(
+                completed = completed,
+                snapshot = snapshot,
+                target = target.line if isinstance(target, Waypoint) else target,
+                enable_context_compression=enable_context_compression
+            ),
+            error_msg=f"请严格按照每行一个[步骤名称]:[动作指令]的格式输出一个子目标列表。",
+            parser=parse,
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["update_summary"] if enable_context_compression else []),
+            max_iterations = max_iterations,
+            max_retries= max_retries,
+        )
+        if response["result"][-1].line == (target.line if isinstance(target, Waypoint) else target):
+            response["result"] = response["result"][:-1]
+        return response["result"]
+    # def try_expand(self, completed: list[Waypoint | str], target: Waypoint | str, max_iterations: int = 10, max_retries: int = 3):
     #     messages = []
     #     tools = self.tool.get_tools(["query_wiki"])
 

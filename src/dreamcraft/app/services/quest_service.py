@@ -1,5 +1,6 @@
 
-from dreamcraft.domain.quest import Quest, Waypoint
+from dreamcraft.domain.quest import Quest
+from dreamcraft.domain.waypoint import Waypoint
 from dreamcraft.app.protocols import IQuestRepo
 from dreamcraft.domain.snapshot import Snapshot
 
@@ -12,10 +13,10 @@ class QuestService:
         if isinstance(target, Quest):
             quest = target
         else:
-            origin = Waypoint(description = "开始")
+            origin = Waypoint(name = "开始")
             origin.actual_snapshot = Snapshot.default()  # 初始状态快照
             origin.imaginated_snapshot = Snapshot.default()  # 初始状态快照
-            target = Waypoint(description = target)
+            target = Waypoint(name = target)
             origin.insert_after(target)
             quest = Quest(origin = origin, target = target)
         self.quests.add(quest)

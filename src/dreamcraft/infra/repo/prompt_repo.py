@@ -1,7 +1,7 @@
 from dreamcraft.config import PROMPT_DIR
 from pathlib import Path
 
-from dreamcraft.domain.quest import Waypoint
+from dreamcraft.domain.waypoint import Waypoint
 from dreamcraft.domain.snapshot import Snapshot
 
 class PromptRepo:
@@ -43,8 +43,8 @@ class PromptRepo:
         prompt = self.react(
             role = self.load("imaginate_role"),
             query = self.load("imaginate_query").format(
-                completed = "- " + "\n- ".join([wp.description if isinstance(wp, Waypoint) else wp for wp in completed]),
-                target=target.description if isinstance(target, Waypoint) else target,
+                completed = "- " + "\n- ".join([wp.line if isinstance(wp, Waypoint) else wp for wp in completed]),
+                target=target.line if isinstance(target, Waypoint) else target,
                 snapshot = snapshot.json
             ),
             enable_context_compression=enable_context_compression
@@ -56,8 +56,21 @@ class PromptRepo:
         prompt = self.react(
             role = self.load("feasibility_check_role"),
             query = self.load("feasibility_check_query").format(
-                completed = "- " + "\n- ".join([wp.description if isinstance(wp, Waypoint) else wp for wp in completed]),
-                target=target.description if isinstance(target, Waypoint) else target,
+                completed = "- " + "\n- ".join([wp.line if isinstance(wp, Waypoint) else wp for wp in completed]),
+                target=target.line if isinstance(target, Waypoint) else target,
+                snapshot = snapshot.json
+            ),
+            enable_context_compression=enable_context_compression
+        )
+        return prompt
+    
+    def expand_path(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
+        """专门用于生成路径扩展的 prompt 模板"""
+        prompt = self.react(
+            role = self.load("expand_path_role"),
+            query = self.load("expand_path_query").format(
+                completed = "- " + "\n- ".join([wp.line if isinstance(wp, Waypoint) else wp for wp in completed]),
+                target = target.line if isinstance(target, Waypoint) else target,
                 snapshot = snapshot.json
             ),
             enable_context_compression=enable_context_compression

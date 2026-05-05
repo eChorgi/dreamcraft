@@ -1,10 +1,13 @@
+from dataclasses import dataclass
 import json
 from typing import Literal
 
 
+
 class WikiDocument:
-    def __init__(self, path: list[str] = None, content: str = None, type: Literal["text", "table", None] = None, chunk_index: int = None):
-        self.path = path
+    def __init__(self, heading_hierarchy: list[str] = None, file: str = None, content: str = None, type: Literal["text", "table", None] = None, chunk_index: int = None):
+        self.heading_hierarchy = heading_hierarchy
+        self.file = file
         self.content = content
         self.type = type
         self.chunk_index = chunk_index
@@ -19,7 +22,8 @@ class WikiDocument:
     @property
     def json(self):
         return {
-            "path": self.path,
+            "heading_hierarchy": self.heading_hierarchy,
+            "file": self.file,
             "content": self.content,
             "type": self.type
         }

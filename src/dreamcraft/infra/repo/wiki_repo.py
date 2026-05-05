@@ -42,7 +42,7 @@ class WikiRepo:
             if i != -1  # FAISS 在搜索结果不足时会返回 -1，建议过滤掉
         ]
 
-    def grep_files(self, pattern: str, max_results: int = -1) -> list[dict]:
+    def grep_files(self, pattern: str, max_results: int = 5) -> list[dict]:
         return grep.grep_files(pattern, self.md_path, "*.md", max_results)
 
     def read_section(self, file_name: str, section_title: str) -> str:
@@ -51,4 +51,5 @@ class WikiRepo:
             file_name += ".md"
         if " " in file_name:
             file_name = file_name.replace(" ", "_")
+        section_title = section_title.replace("#", "").strip()  # 去掉可能的 Markdown 标题符号和多余空格
         return grep.read_md_section(self.md_path / file_name, section_title)

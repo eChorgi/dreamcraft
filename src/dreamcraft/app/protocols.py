@@ -1,7 +1,8 @@
 from typing import Protocol
 from langchain_core.tools import tool
 import numpy as np
-from dreamcraft.domain.quest import Quest, Waypoint
+from dreamcraft.domain.quest import Quest
+from dreamcraft.domain.waypoint import Waypoint
 
 from langchain_core.runnables import Runnable
 from langchain_core.language_models import LanguageModelInput
@@ -44,11 +45,13 @@ class ILLMClient(Protocol):
 class IPromptRepo(Protocol):
     def load(self, name: str)-> str:
         ...
-    def react(self, role: str, query: str) -> str:
+    def react(self, role: str, query: str, extra: str = "", enable_context_compression: bool = True) -> str:
         ...
-    def imaginate(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot) -> str:
+    def imaginate(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
         ...
-    def feasibility_check(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot) -> str:
+    def feasibility_check(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
+        ...
+    def expand_path(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
         ...
 
 class IToolRepo(Protocol):

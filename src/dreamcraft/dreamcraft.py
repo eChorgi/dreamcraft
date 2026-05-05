@@ -3,7 +3,7 @@ from typing import Dict
 
 from dreamcraft.app.common.messaging import Mailbox
 from dreamcraft.app.orchestrator.action_orchestrator import ActionOrchestrator
-from dreamcraft.app.orchestrator.mission_orchestrator import MissionOrchestrator
+from dreamcraft.app.orchestrator.quest_orchestrator import QuestOrchestrator
 from dreamcraft.app.services.llm_service import LLMService
 from dreamcraft.container import GlobalContainer
 from dreamcraft.infra.repo.skill_repo import SkillRepo
@@ -32,7 +32,7 @@ def bootstrap():
         llm: LLMService
 
     class OrchestratorContainer(GlobalContainer):
-        mission: MissionOrchestrator
+        quest: QuestOrchestrator
         action: ActionOrchestrator
 
     class AppContainer(GlobalContainer):
@@ -45,7 +45,7 @@ def bootstrap():
     infra = InfraContainer()
     service = ServiceContainer()
     orchestrator = OrchestratorContainer()
-    mission_inbox = Mailbox()
+    quest_inbox = Mailbox()
     action_inbox = Mailbox()
 
     # 初始化基础设施组件
@@ -65,8 +65,8 @@ def bootstrap():
     s_llm = LLMService(llm=i_llm, prompt=i_prompt, tool=i_tools)
 
     # 初始化 Orchestrator
-    o_mission = MissionOrchestrator(quest=s_quest, llm=s_llm, prompt=i_prompt,inbox=mission_inbox,outbox=action_inbox)
-    o_action = ActionOrchestrator(inbox=action_inbox,outbox=mission_inbox)
+    o_quest = QuestOrchestrator(quest=s_quest, llm=s_llm, prompt=i_prompt,inbox=quest_inbox,outbox=action_inbox)
+    o_action = ActionOrchestrator(inbox=action_inbox,outbox=quest_inbox)
 
     container.register("infra", infra)
     container.register("service", service)
@@ -80,7 +80,7 @@ def bootstrap():
     service.register("knowledge", s_knowledge)
     service.register("quest", s_quest)
     service.register("llm", s_llm)
-    orchestrator.register("mission", o_mission)
+    orchestrator.register("quest", o_quest)
     orchestrator.register("action", o_action)
 
     return container

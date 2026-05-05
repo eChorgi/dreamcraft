@@ -6,16 +6,17 @@ from dreamcraft.app.common.messaging import Mailbox
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo
 from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.app.services.llm_service import LLMService
-from dreamcraft.domain.quest import Waypoint, Quest
+from dreamcraft.domain.quest import Quest
+from dreamcraft.domain.waypoint import Waypoint
 
-class MissionState(StrEnum):
+class QuestState(StrEnum):
     INIT = auto()       # 初始化规划
     CHECK_FEASIBILITY = auto()  # 检查技能可用性
     EXPAND = auto()     # 任务分解
     FIX = auto()        # 失败修正
     SUCCESS = auto()    # 任务成功
 
-class MissionContext:
+class QuestContext:
     """上下文总线：在整个状态机流转中传递的唯一数据包"""
     def __init__(self, target):
         self.target: str = target
@@ -29,7 +30,7 @@ class MissionContext:
         self.error_history = []
         self.step_count = 0
 
-class MissionOrchestrator:
+class QuestOrchestrator:
     def __init__(
             self,
             quest: QuestService, 
@@ -47,11 +48,11 @@ class MissionOrchestrator:
 
     def run(self, target: str):
         """状态机的主循环"""
-        ctx = MissionContext(target)
-        current_state = MissionState.INIT
+        ctx = QuestContext(target)
+        current_state = QuestState.INIT
         max_steps = 10000
 
-        while current_state != MissionState.END and ctx.step_count < max_steps:
+        while current_state != QuestState.END and ctx.step_count < max_steps:
             handler_method_name = f"handle_{current_state.lower()}"
             handler = getattr(self, handler_method_name, self.handle_unknown)
 
@@ -63,12 +64,12 @@ class MissionOrchestrator:
 
     # ================= 状态处理方法 =================
 
-    def handle_init(self, ctx: MissionContext) -> MissionState:
+    def handle_init(self, ctx: QuestContext) -> QuestState:
         ctx.quest = self.quest.add_quest(ctx.target)
         ctx.imaginating_waypoint = ctx.quest.origin
-        return MissionState.CHECK_FEASIBILITY
+        return QuestState.CHECK_FEASIBILITY
 
-    def handle_try_expand(self, ctx: MissionContext) -> MissionState:
+    def handle_expand(self, ctx: QuestContext) -> QuestState:
         
         is_feasible = self.llm.try_expand(
             completed = ctx.completed,
@@ -76,20 +77,20 @@ class MissionOrchestrator:
             snapshot = self.get_current_snapshot()
         )
         if is_feasible:
-            return MissionState.EXPAND
+            return QuestState.EXPAND
         else:
-            return MissionState.EXPAND
+            return QuestState.EXPAND
 
-    def handle_execute(self, ctx: MissionContext) -> MissionState:
+    def handle_execute(self, ctx: QuestContext) -> QuestState:
         result = self.action_agent.execute(ctx.paths)
         
         if result.success:
-            return MissionState.REVIEW
+            return QuestState.REVIEW
         else:
             ctx.error_history.append(result.error_msg)
             return "REVISE_PLAN"
 
-    def handle_unknown(self, ctx: MissionContext) -> MissionState:
+    def handle_unknown(self, ctx: QuestContext) -> QuestState:
         raise ValueError("进入了未知的系统状态！")
     
     

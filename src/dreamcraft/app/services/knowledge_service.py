@@ -10,7 +10,7 @@ class KnowledgeService:
         self.llm = llm
         self.skill = skill
 
-    def query_wiki(self, keyword, items=3):
+    def query_wiki(self, keyword, items=3) -> list[dict]:
         query_embedding = self.llm.embed(keyword)
         results = self.wiki.query(query_embedding, top_k=items*2+1000)
         
@@ -24,7 +24,7 @@ class KnowledgeService:
         
         return final
     
-    def query_skill(self, keyword, items=3):
+    def query_skill(self, keyword, items=3) -> list[dict]:
         query_embedding = self.llm.embed(keyword)
         return self.skill.query(query_embedding, top_k=items)
     

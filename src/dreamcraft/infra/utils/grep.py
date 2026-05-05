@@ -2,7 +2,7 @@ import pathlib
 import re
 
 
-def grep_files(pattern: str, path: pathlib.Path, include: str = "*", max_results: int = -1, with_heading_hierarchy: bool = True) -> list[dict]:
+def grep_files(pattern: str, path: pathlib.Path, include: str = "*", max_results: int = 5, with_heading_hierarchy: bool = True) -> list[dict]:
     try:
         regex = re.compile(pattern, re.I | re.M)
     except re.error as e:
