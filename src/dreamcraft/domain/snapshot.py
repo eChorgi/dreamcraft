@@ -32,6 +32,18 @@ class Snapshot:
         return json.dumps(self.dict, ensure_ascii=False)
     
     @property
+    def details(self):
+        return {
+            "inventory": self.inventory,
+            "equipment": self.equipment,
+            "health": self.health,
+            "hunger": self.hunger,
+            "entities": self.entities,
+            "voxels": self.voxels,
+            "extra_info": self.extra_info
+        }
+    
+    @property
     @staticmethod
     def schema() -> str:
         return json.dumps({

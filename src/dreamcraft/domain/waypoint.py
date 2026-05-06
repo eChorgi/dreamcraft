@@ -17,9 +17,6 @@ class Waypoint:
         #   节点想象与实际状态
         self.imaginated_snapshot = imaginated_snapshot
         self.actual_snapshot = actual_snapshot
-        #   通路可行性
-        self.failed_paths: dict[Waypoint, str] = {} # 记录不可行的子节点以及对应的失败原因
-
 
                
         # 内部属性
@@ -63,6 +60,23 @@ class Waypoint:
         if self.actual_snapshot:
             _dict["actual_snapshot"] = self.actual_snapshot.details
         return _dict
+    
+    @property
+    def all_successors(self):
+        successors = set()
+        for waypoint in self.next:
+            successors.add(waypoint)
+            successors.update(waypoint.all_successors)
+        return successors
+    
+    @property
+    def all_predecessors(self):
+        predecessors = set()
+        for waypoint in self.prev:
+            predecessors.add(waypoint)
+            predecessors.update(waypoint.all_predecessors)
+        return predecessors
+
 
     def branch_to(self, waypoint):
         """
@@ -174,7 +188,7 @@ class Waypoint:
             self.quest.init()  # 重新生成 waypoints 确保索引正确
 
         
-    def expand_between(self, target: 'Waypoint', path: list[Union['Waypoint', str]]):
+    def inject_between(self, target: 'Waypoint', path: list[Union['Waypoint', str]]):
         if target in self.next:
             is_target_next = True
         elif target in self.prev:
@@ -186,12 +200,28 @@ class Waypoint:
         current_ptr = self
         for waypoint in path:
             # 可以在这里自动绑定 quest，保证领域对象一致性
-            waypoint.quest = self.quest 
             current_ptr.insert_between(target, waypoint)
             if is_target_next:
                 current_ptr = waypoint
             else:
                 target = waypoint
+    
+    def link_between(self, target: 'Waypoint', path: list[Union['Waypoint', str]]):
+        if target in self.all_successors:
+            is_target_next = True
+        elif target in self.all_predecessors:
+            is_target_next = False
+        else:
+            raise ValueError(f"目标节点 {target} 既不是当前节点 {self} 的后续节点，也不是前置节点，无法链接路径")
+
+        path = [Waypoint.coerce(wp) for wp in path]
+        self.branch_to(path[0])
+        for i in range(len(path)-1):
+            waypoint = path[i]
+            next_waypoint = path[i+1]
+            waypoint.branch_to(next_waypoint)
+        path[-1].branch_to(target)
+        
 
     #静态类方法，提供从字符串描述创建节点的便捷方式
     @staticmethod

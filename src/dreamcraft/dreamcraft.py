@@ -1,10 +1,12 @@
 import os
 from typing import Dict
 
-from dreamcraft.app.common.messaging import Mailbox
+from dreamcraft.app.core.messaging import Mailbox
 from dreamcraft.app.core.quest_runner import QuestRunner
 from dreamcraft.app.core.quest_orchestrator import QuestOrchestrator
+from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, ISkillRepo, IToolRepo, IWikiRepo
 from dreamcraft.app.services.llm_service import LLMService
+from dreamcraft.app.services.llm_service_mock import LLMServiceMock
 from dreamcraft.container import GlobalContainer
 from dreamcraft.infra.repo.skill_repo import SkillRepo
 from dreamcraft.config import settings
@@ -19,17 +21,17 @@ from dreamcraft.interface.tool_repo import ToolRepo
 
 def bootstrap():
     class InfraContainer(GlobalContainer):
-        llm: LLMClient
-        wiki: WikiRepo
-        path: QuestRepo
-        prompt: PromptRepo
-        skill: SkillRepo
-        tool: ToolRepo
+        llm: ILLMClient
+        wiki: IWikiRepo
+        path: IQuestRepo
+        prompt: IPromptRepo
+        skill: ISkillRepo
+        tool: IToolRepo
     
     class ServiceContainer(GlobalContainer):
         knowledge: KnowledgeService
         quest: QuestService
-        llm: LLMService
+        llm: LLMServiceMock
 
     class OrchestratorContainer(GlobalContainer):
         quest: QuestOrchestrator
@@ -62,11 +64,12 @@ def bootstrap():
     # 初始化工具管理器
     i_tools = ToolRepo(s_knowledge, s_quest)
 
+    # s_llm = LLMServiceMock(llm=i_llm, prompt=i_prompt, tool=i_tools, quest=i_quest)
     s_llm = LLMService(llm=i_llm, prompt=i_prompt, tool=i_tools, quest=i_quest)
 
     # 初始化 Orchestrator
     o_quest = QuestOrchestrator(quest=s_quest, llm=s_llm, prompt=i_prompt,inbox=quest_inbox,outbox=action_inbox)
-    o_action = QuestRunner(inbox=action_inbox,outbox=quest_inbox)
+    # o_action = QuestRunner(inbox=action_inbox,outbox=quest_inbox)
 
     container.register("infra", infra)
     container.register("service", service)
@@ -81,7 +84,6 @@ def bootstrap():
     service.register("quest", s_quest)
     service.register("llm", s_llm)
     orchestrator.register("quest", o_quest)
-    orchestrator.register("runner", o_action)
 
     return container
 

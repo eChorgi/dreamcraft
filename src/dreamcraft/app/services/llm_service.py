@@ -266,7 +266,9 @@ class LLMService:
                     waypoints.append(Waypoint(name=line.strip()))
                     continue
                 name, action = line.split(":", 1)
-                waypoints.append(Waypoint(name=name.strip(), description=action.strip()))
+                name = name.replace("\\n", "").strip()
+                action = action.replace("\\n", "").strip()
+                waypoints.append(Waypoint(name=name, description=action))
             return waypoints    
         response = self.react(
             prompt = self.prompt.expand_path(

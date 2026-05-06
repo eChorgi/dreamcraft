@@ -23,12 +23,27 @@ class QuestService:
         print(f"添加目标地图: {quest}")
         return quest
 
-    def expand_between(self, start: Waypoint | int | str, end: Waypoint | int | str, path: list[Waypoint | str], quest: Quest = None):
+    def inject_between(self, start: Waypoint | int | str, end: Waypoint | int | str, path: list[Waypoint | str], quest: Quest = None):
         """根据当前目标扩展路径，生成新的子目标 , quest默认指定最新任务"""
 
         start = self.get_waypoint(start, quest)
         end = self.get_waypoint(end, quest)
-        start.expand_between(end, path=path)
+        start.inject_between(end, path=path)
+
+    def link_between(self, start: Waypoint | int | str, end: Waypoint | int | str, path: list[Waypoint | str], quest: Quest = None):
+        """根据当前目标链接路径，生成新的子目标 , quest默认指定最新任务"""
+
+        start = self.get_waypoint(start, quest)
+        end = self.get_waypoint(end, quest)
+        start.link_between(end, path=path)
+
+    def expand_between(self, start: Waypoint | int | str, end: Waypoint | int | str, path: list[Waypoint | str], quest: Quest = None):
+        if end in start.next:
+            self.inject_between(start, end, path, quest)
+        elif end in start.prev:
+            self.inject_between(end, start, path[::-1], quest)
+        else:
+            self.link_between(start, end, path, quest)
 
     def get_waypoint(self, ref: Waypoint | int | str, quest: Quest = None) -> Waypoint:
         """根据节点引用获取节点对象"""
