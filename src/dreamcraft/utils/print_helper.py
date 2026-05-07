@@ -14,8 +14,8 @@ def ipynb_print(data, include:list[str]=None, exclude:list[str]=None):
         indent = "  " * level  
         if layers is None:
             layers = []
-        if isinstance(node, str) and node.startswith('[\n'):
-            print("检测到可能的 JSON 字符串，尝试解析...")
+        # if isinstance(node, str) and node.startswith('[\n'):
+        #     print("检测到可能的 JSON 字符串，尝试解析...")
         try:
             node = json.loads(node) if isinstance(node, str) else node
             # node = re.sub(r'\'\[(.*?)\]\'', r'\(\1\)', node)

@@ -1,8 +1,7 @@
 import os
 from typing import Dict
 
-from dreamcraft.app.core.messaging import Mailbox
-from dreamcraft.app.core.quest_executor import QuestRunner
+from dreamcraft.app.core.messaging import MessageBus
 from dreamcraft.app.core.quest_orchestrator import QuestOrchestrator
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, ISkillRepo, IToolRepo, IWikiRepo
 from dreamcraft.app.services.llm_service import LLMService
@@ -32,23 +31,18 @@ def bootstrap():
         knowledge: KnowledgeService
         quest: QuestService
         llm: LLMServiceMock
+        orchestrator: QuestOrchestrator
 
-    class OrchestratorContainer(GlobalContainer):
-        quest: QuestOrchestrator
-        runner: QuestRunner
 
     class AppContainer(GlobalContainer):
         infra: InfraContainer
         service: ServiceContainer
-        orchestrator: OrchestratorContainer
 
     # 初始化全局容器和服务
     container = AppContainer()
     infra = InfraContainer()
     service = ServiceContainer()
-    orchestrator = OrchestratorContainer()
-    quest_inbox = Mailbox()
-    action_inbox = Mailbox()
+    message_bus = MessageBus()
 
     # 初始化基础设施组件
     i_llm = LLMClient(settings)
@@ -68,12 +62,11 @@ def bootstrap():
     s_llm = LLMService(llm=i_llm, prompt=i_prompt, tool=i_tools, quest=i_quest)
 
     # 初始化 Orchestrator
-    o_quest = QuestOrchestrator(quest=s_quest, llm=s_llm, prompt=i_prompt,inbox=quest_inbox,outbox=action_inbox)
+    s_quest = QuestOrchestrator(s_quest=s_quest, llm=s_llm, prompt=i_prompt, bus=message_bus)
     # o_action = QuestRunner(inbox=action_inbox,outbox=quest_inbox)
 
     container.register("infra", infra)
     container.register("service", service)
-    container.register("orchestrator", orchestrator)
     infra.register("llm", i_llm)
     infra.register("wiki", i_wiki)
     infra.register("quest", i_quest)
@@ -83,7 +76,6 @@ def bootstrap():
     service.register("knowledge", s_knowledge)
     service.register("quest", s_quest)
     service.register("llm", s_llm)
-    orchestrator.register("quest", o_quest)
 
     return container
 

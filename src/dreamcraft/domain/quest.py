@@ -8,11 +8,20 @@ class Quest:
     def __init__(self, origin: Waypoint, target: Waypoint):
         self.origin = origin
         self.target = target
-        self._block_reason_map = dict[frozenset[Waypoint],str]()
+        self.current = origin
         self.waypoints = []
+
+        self.executing: Waypoint | None = None
+        self.snapshot = Snapshot.default()
+
+        self.completed: list[Waypoint] = []
+
+        self.executable_waypoints: set[Waypoint] = set()
+        self._block_reason = dict[frozenset[Waypoint],str]()
+        self.error_history = []
+        self.step_count = 0
+
         self.init()
-
-
 
     @staticmethod
     def copy(quest: 'Quest') -> 'Quest':
@@ -69,20 +78,20 @@ class Quest:
         return Quest(new_start, new_final) # final之后节点的裁剪操作在构造函数的init()方法中完成
     
     def set_edge_feasible(self, from_waypoint: Waypoint, to_waypoint: Waypoint,value: bool, reason: str = ""):
-        if value == False and self._block_reason_map.get(frozenset([from_waypoint, to_waypoint]), "None") != "None":
-            del self._block_reason_map[frozenset([from_waypoint, to_waypoint])]
+        if value == False and self._block_reason.get(frozenset([from_waypoint, to_waypoint]), "None") != "None":
+            del self._block_reason[frozenset([from_waypoint, to_waypoint])]
         elif value == True:
-            self._block_reason_map[frozenset([from_waypoint, to_waypoint])] = reason
+            self._block_reason[frozenset([from_waypoint, to_waypoint])] = reason
 
     def get_edge_feasible(self, from_waypoint: Waypoint, to_waypoint: Waypoint) -> dict:
         class FeasibilityResult:
             def __init__(self, value: bool, reason: str = ""):
                 self.value = value
                 self.reason = reason
-        if self._block_reason_map.get(frozenset([from_waypoint, to_waypoint]), "None") != "None":
+        if self._block_reason.get(frozenset([from_waypoint, to_waypoint]), "None") != "None":
             return FeasibilityResult(
                 value = True,
-                reason = self._block_reason_map[frozenset([from_waypoint, to_waypoint])],
+                reason = self._block_reason[frozenset([from_waypoint, to_waypoint])],
             )
         return FeasibilityResult(value = False)
 

@@ -17,7 +17,6 @@ class LLMClient:
         os.environ.pop("http_proxy", None)
         os.environ.pop("https_proxy", None)
         os.environ.pop("all_proxy", None)
-        # 1. 初始化对话模型 (用于思考、决策)
         self.chat_client = ChatOpenAI(
             api_key=settings.chat_api_key,
             model=settings.chat_model_name,
@@ -25,19 +24,7 @@ class LLMClient:
             timeout=settings.request_timeout, 
         )
         self.dim = settings.embedding_dimension
-        # 2. 初始化向量模型 (用于检索、相似度计算)
-        # self.embeddings = OpenAIEmbeddings(
-        #     api_key=settings.embedding_api_key,
-        #     model=settings.embedding_model_name,
-        #     base_url=settings.embedding_url,
-        # )
         self.embedding_client = OpenAI(api_key=settings.embedding_api_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
-
-        # self.embeddings = OpenAIEmbeddings(
-        #     api_key=settings.embedding_api_key,
-        #     model=settings.embedding_model_name,
-        #     base_url=settings.embedding_url,
-        # )
 
     def embed(self, text: str) -> np.ndarray:
         response = self.embedding_client.embeddings.create(

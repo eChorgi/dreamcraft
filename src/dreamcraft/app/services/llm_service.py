@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from typing import List, Union
@@ -21,7 +22,7 @@ class LLMService:
         self.tool = tool
         self.quest = quest
 
-    def react(
+    async def react(
         self, 
         prompt: str, 
         tools: List[Union[tool, str]],
@@ -62,7 +63,7 @@ class LLMService:
 
             # messages.append(AIMessage(content=f"当前思考轮次: {current_iteration + 1}"))
             # 1. 把全套历史记录喂给 LLM
-            ai_msg = llm_with_tools.invoke(messages)
+            ai_msg = await llm_with_tools.ainvoke(messages)
             messages.append(ai_msg) # 把 LLM 的回复（不管是不是工具调用）记录到历史中
             full_messages.append(ai_msg)
             token_usage = ai_msg.response_metadata.get("token_usage", 0)
@@ -104,35 +105,42 @@ class LLMService:
             print(f"🔍 AI 决定并行调用 {len(ai_msg.tool_calls)} 个工具...")
             tool_results_dict = {}
             summary_content = None
+            # 1. 准备协程任务和映射字典
+            tasks = []
+            tool_calls_map = []  # 用来记录任务顺序，以便稍后对号入座
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_call = {}
-                for tool_call in ai_msg.tool_calls:
-                    tool_name = tool_call["name"]
-                    tool_args = tool_call.get("args", {})
-                    tool_func = tool_dict.get(tool_name)
-                    
-                    future = executor.submit(tool_func.invoke, tool_args)
-                    future_to_call[future] = tool_call
-                    
-                for future in concurrent.futures.as_completed(future_to_call):
-                    tool_call = future_to_call[future]
-                    try:
-                        observation = future.result()
-                        print(f"  ✅ 工具 '{tool_call['name']}' 执行成功。")
-                    except Exception as e:
-                        observation = f"⚠️ 工具执行报错: {str(e)}。请检查参数并重试。"
-                        print(f"  ❌ 工具 '{tool_call['name']}' 执行失败: {e}")
-                    
-                    # 将结果存入字典，key使用tool_call_id，方便后续按原顺序组装
-                    if tool_call["name"] == "summary":
-                        summary_content = observation
-                        if current_iteration > 0:
-                            print(f"  📝 提取到摘要内容: {observation}")
-                        else:
-                            observation = "第一轮没有摘要内容"
-                    tool_results_dict[tool_call["id"]] = observation
+            for tool_call in ai_msg.tool_calls:
+                tool_name = tool_call["name"]
+                tool_args = tool_call.get("args", {})
+                tool_func = tool_dict.get(tool_name)
 
+                # 将协程对象（不加 await）加入列表。注意使用 ainvoke
+                tasks.append(tool_func.ainvoke(tool_args))
+                tool_calls_map.append(tool_call)
+
+            # 2. 并发执行所有工具
+            # return_exceptions=True 让报错的工具返回 Exception 对象而不是直接崩溃退出
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # 3. 处理返回结果
+            for idx, observation in enumerate(results):
+                tool_call = tool_calls_map[idx]
+
+                if isinstance(observation, Exception):
+                    observation_str = f"⚠️ 工具执行报错: {str(observation)}。请检查参数并重试。"
+                    print(f"  ❌ 工具 '{tool_call['name']}' 执行失败: {observation}")
+                else:
+                    observation_str = observation
+                    print(f"  ✅ 工具 '{tool_call['name']}' 执行成功。")
+
+                # 处理 summary 逻辑
+                if tool_call["name"] == "summary":
+                    summary_content = observation_str
+                    if current_iteration > 0:
+                        print(f"  📝 提取到摘要内容: {observation_str}")
+                    else:
+                        observation_str = "第一轮没有摘要内容"
+
+                tool_results_dict[tool_call["id"]] = observation_str
 
             # 2. 严格按照 ai_msg.tool_calls 的原始顺序，把 ToolMessage 加入到消息列表
             for tool_call in ai_msg.tool_calls:
@@ -182,7 +190,7 @@ class LLMService:
     
 
 
-    def check_feasibility(
+    async def check_feasibility(
         self, 
         completed: list[Waypoint | str], 
         target: Waypoint | str, 
@@ -196,7 +204,7 @@ class LLMService:
             if "False" in text: return False
             return None
 
-        response = self.react(
+        response = await self.react(
             prompt = self.prompt.feasibility_check(
                 completed = completed,
                 target = target,
@@ -211,7 +219,7 @@ class LLMService:
         )
         return response["result"]
 
-    def imaginate(
+    async def imaginate(
         self, 
         completed: list[Waypoint | str], 
         target: Waypoint | str, 
@@ -220,7 +228,7 @@ class LLMService:
         max_retries: int = 5, 
         enable_context_compression: bool = True
     ) -> Snapshot:
-        response = self.react(
+        response = await self.react(
             prompt = self.prompt.imaginate(
                 completed = completed,
                 target = target,
@@ -235,14 +243,14 @@ class LLMService:
         )
         return response["result"]
     
-    def chat(
+    async def chat(
         self, 
         query: str, 
         max_iterations: int = 10, 
         max_retries: int = 5, 
         enable_context_compression: bool = True
     ) -> str:
-        response = self.react(
+        response = await self.react(
             prompt = self.prompt.react(
                 role="你是一个 Minecraft 游戏聊天助手，负责与玩家进行对话，提供游戏内的帮助和建议。",
                 query = query,
@@ -256,7 +264,7 @@ class LLMService:
         )
         return response["result"]
 
-    def expand_path(
+    async def expand_path(
         self,
         completed: list[Waypoint | str], 
         target: Waypoint | str, 
@@ -279,7 +287,7 @@ class LLMService:
                 action = action.replace("\\n", "").strip()
                 waypoints.append(Waypoint(name=name, description=action))
             return waypoints    
-        response = self.react(
+        response = await self.react(
             prompt = self.prompt.expand_path(
                 completed = completed,
                 snapshot = snapshot,
@@ -296,7 +304,7 @@ class LLMService:
             response["result"] = response["result"][:-1]
         return response["result"]
     
-    def navigate(
+    async def navigate(
         self,
         target: Waypoint, 
         snapshot: Snapshot, 
@@ -313,7 +321,7 @@ class LLMService:
                     return None
                 ind = int(ind)
             return self.quest.get_waypoint(ind)
-        response = self.react(
+        response = await self.react(
             prompt = self.prompt.navigate(
                 snapshot = snapshot,
                 target = target.details if isinstance(target, Waypoint) else target,
@@ -327,7 +335,7 @@ class LLMService:
         )
         return response["result"]
     
-    def check_granularity(
+    async def check_granularity(
         self, 
         target: Waypoint | str, 
         snapshot: Snapshot, 
@@ -340,7 +348,7 @@ class LLMService:
             if "False" in text: return False
             return None
 
-        response = self.react(
+        response = await self.react(
             prompt = self.prompt.granularity_check(
                 target = target,
                 snapshot = snapshot,
@@ -354,7 +362,7 @@ class LLMService:
         )
         return response["result"]
     
-    def generate_code(
+    async def generate_code(
         self, 
         target: Waypoint | str, 
         snapshot: Snapshot, 
@@ -367,7 +375,7 @@ class LLMService:
             if "False" in text: return False
             return None
 
-        response = self.react(
+        response = await self.react(
             prompt = self.prompt.granularity_check(
                 target = target,
                 snapshot = snapshot,
