@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Protocol
 from langchain_core.tools import tool
 import numpy as np
@@ -8,7 +9,7 @@ from langchain_core.runnables import Runnable
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
 
-from dreamcraft.domain.skill import Skill
+from dreamcraft.domain.skill import LoadJSResult, LoadJSResults, Skill
 from dreamcraft.domain.snapshot import Snapshot
 from dreamcraft.domain.wiki import WikiDocument
 
@@ -35,6 +36,17 @@ class ISkillRepo(Protocol):
         ...
     def get(self, ref: int | str) -> Skill:
         ...
+    def load_js_skill(self, js_path: Path) -> LoadJSResult:
+        ...
+    def load_js_dir_skills(self, dir: Path) -> LoadJSResults:
+        ...
+    def update_private_skills(self, private_skills: list[Skill]):
+        ...
+    def update_all_dependencies(self):
+        ...
+    def inject_dependencies(self, code: str) -> str:
+        ...
+    
 
 class ILLMClient(Protocol):
     def embed(self, text: str) -> np.ndarray:

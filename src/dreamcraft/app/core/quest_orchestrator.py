@@ -4,7 +4,7 @@ from langchain_core.tools import tool
 from enum import StrEnum, auto
 from dreamcraft.app.core.messaging import Mailbox
 from dreamcraft.app.core.quest_context import QuestContext
-from dreamcraft.app.core.quest_runner import QuestRunner
+from dreamcraft.app.core.quest_executor import QuestExecutor
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo
 from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.app.services.llm_service import LLMService
@@ -38,7 +38,7 @@ class QuestOrchestrator:
         self.outbox = outbox
         self.context = None
 
-        self.runner = QuestRunner(self.outbox, self.inbox, self.context)
+        self.runner = QuestExecutor(self.outbox, self.inbox, self.context)
 
 
     def run(self, target: str):

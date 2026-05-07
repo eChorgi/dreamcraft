@@ -38,7 +38,7 @@ app.use(bodyParser.urlencoded({ limit: "50mb", extended: false }));
 
 // 启动（或重启）机器人。
 app.post("/start", (req, res) => {
-    // 若已有 bot，先优雅断开，避免重复连接同一服务端。
+    // 若已有 bot，先断开，避免重复连接同一服务端。
     if (bot) onDisconnect("Restarting bot");
     bot = null;
     console.log(req.body);

@@ -1,16 +1,26 @@
+from dataclasses import dataclass
 import json
 import os
+from pathlib import Path
+import re
 import faiss
 import numpy as np
-from dreamcraft.domain.skill import Skill
+from dreamcraft.domain.skill import LoadJSResult, LoadJSResults, Skill
 
 class SkillRepo:
     def __init__(self, settings):
         self.dim = settings.embedding_dimension
         self.json_path = settings.skill_documents_path
+        self.npy_path = settings.skill_embeddings_path
         self.faiss_index_path = settings.skill_faiss_index_path
+        
+        self.private_skills:list[Skill] = []
 
         self.skills: list[Skill] = self.load_skills_from_json(self.json_path)
+        try:
+            self.embeddings: np.ndarray = np.load(self.npy_path) 
+        except:
+            self.embeddings: np.ndarray = None
         self.skills_dict = {skill.name: skill for skill in self.skills}
         self.faiss_index = self.load_faiss_index(self.faiss_index_path)
         
@@ -22,6 +32,102 @@ class SkillRepo:
         else:
             raise KeyError("Key must be either int (index) or str (skill name)")
 
+    def load_js_skill(self, js_path: Path)-> LoadJSResult:
+        with open(js_path, 'r', encoding='utf-8') as f:
+            code_lines = f.readlines()
+        
+        is_comment = False
+        description_lines = []
+        name_line = ''
+        code_begin = 0
+        is_private = False
+        for i, line in enumerate(code_lines):
+            line = line.replace('"',"'")
+            if line.strip().startswith('//'):
+                if re.search(r'@\s*dreamcraft\s*-private', line.strip()):
+                    is_private = True
+                description_lines.append(line.strip()[2:])
+            elif line.strip().startswith('/*'):
+                is_comment = True
+                description_lines.append(line.strip()[2:])
+            elif is_comment:
+                if line.strip().endswith('*/'):
+                    is_comment = False
+                    description_lines.append(line.strip()[:-2])
+                else:
+                    line = line.lstrip(" *")
+                    description_lines.append(line.strip())
+            else:
+                body = "".join(code_lines[i:])
+                left_paren_count = -1
+                for i, c in enumerate(body):
+                    if c == '(':
+                        left_paren_count = 1 if left_paren_count == -1 else left_paren_count + 1
+                    elif c == ')':
+                        left_paren_count -= 1
+                    if left_paren_count == 0:
+                        name_end_index = i
+                        break
+                name = body[:name_end_index+1].strip()
+                name = re.sub(r'\s*\n\s*', '', name)
+                break
+                    
+            
+        description = ''.join(description_lines).strip()
+        function = body
+        provider = js_path.parent
+        return LoadJSResult(skill=Skill(name=name, description=description, function=function, provider=provider), is_private=is_private)
+
+
+    def load_js_dir_skills(self, dir: Path) -> LoadJSResults:
+        #获取目录下所有子目录, pathlib实现
+        subdirs = [entry for entry in dir.iterdir() if entry.is_dir()]
+        #遍历每个子目录，获取其中的js文件
+        js_files = []
+        for subdir in subdirs:
+            for root, dirs, files in os.walk(subdir):
+                for file in files:
+                    if file.endswith('.js'):
+                        js_files.append(Path(root) / file)
+        
+        skills = []
+        private_skills = []
+        for js_file in js_files:
+            result = self.load_js_skill(js_file)
+            skill = result.skill
+            is_private = result.is_private
+            if skill is not None:
+                if is_private:
+                    private_skills.append(skill)
+                else:
+                    skills.append(skill)
+            
+        return LoadJSResults(skills=skills, private_skills=private_skills)
+    
+    def update_dependencies(self, skill: Skill):
+        if not skill.function:
+            return
+        
+        for search_skill in list(dict.fromkeys(self.skills + self.private_skills)):
+            if not search_skill.function or search_skill.name == skill.name:
+                continue
+
+            if search_skill.name.split('(')[0].split('function')[-1] in skill.function:
+                skill.dependencies.add(search_skill)
+    
+    def update_all_dependencies(self):
+        for skill in self.skills + self.private_skills:
+            self.update_dependencies(skill)
+    
+    def inject_dependencies(self, code: str):
+        dep = set()
+        for skill in self.skills:
+            if skill.name.split('(')[0].split('function')[-1] in code:
+                dep.add(skill)
+                dep.update(skill.resolve_dependencies())
+        for s in dep:
+            code += f"\n\n{s.function}"
+        return code
 
     def load_skills_from_json(self, json_path):
         if not json_path.exists():
@@ -34,14 +140,30 @@ class SkillRepo:
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 skills = json.load(f)
-            return [Skill(**doc) for doc in skills]
+            lst = [Skill(**doc) for doc in skills]
+            for x in lst:
+                x.provider = json_path.stem
+            return list(dict.fromkeys(lst))  # 去重，保持顺序
         except json.JSONDecodeError:
             print(f"错误: {json_path} 格式非法")
             return []
     
+    def add_private_skill(self, new_private_skill: Skill):
+        if new_private_skill in self.private_skills:
+            return
+        self.private_skills.append(new_private_skill)
+        self.update_dependencies(new_private_skill)
+
+    def update_private_skills(self, new_private_skills: list[Skill]):
+        for skill in new_private_skills:
+            self.add_private_skill(skill)
+        self.private_skills = list(dict.fromkeys(self.private_skills))
+
     def load_faiss_index(self, index_path):
         if not index_path.exists():
             faiss_index = faiss.IndexFlatL2(self.dim)
+            for i in range(len(self.skills)):
+                faiss_index.add(self.embeddings[i:i+1])
             return faiss_index
         faiss_index = faiss.read_index(str(index_path))
         return faiss_index
@@ -67,16 +189,23 @@ class SkillRepo:
 
     def add(self, skill: Skill, skill_embedding: np.ndarray):
         """添加新技能到知识库，并更新 FAISS 索引和文档列表"""
+        if skill in self.skills:
+            print(f"技能 {skill.name} 已存在，跳过添加")
+            return
+        print(f"添加技能 {skill.name} 到知识库")
         self.skills.append(skill)
         self.skills_dict[skill.name] = skill
+        if self.embeddings is not None:
+            self.embeddings = np.vstack([self.embeddings, skill_embedding])
         self.faiss_index.add(skill_embedding)
         self.save_skills_to_json(self.json_path)
         self.save_faiss_index(self.faiss_index_path)
+        self.update_dependencies(skill)
     
     def get(self, ref: int | str) -> Skill:
         """根据索引或技能名称获取技能信息"""
         if isinstance(ref, int):
-            return self.skills[ref]
+            return list(self.skills)[ref]
         elif isinstance(ref, str):
             return self.skills_dict.get(ref)
         else:

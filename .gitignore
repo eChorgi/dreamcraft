@@ -2,8 +2,8 @@
 .DS_Store
 Thumbs.db
 node_modules/
-
-raw/
+test/
+_raw_data/
 data/
 *.ipynb
 **/__pycache__/

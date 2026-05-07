@@ -21,7 +21,7 @@ class Waypoint:
                
         # 内部属性
         #   拓扑结构
-        self.next = set(next) if next else set[Waypoint]()
+        self.next:set[Waypoint] = set(next) if next else set()
         for waypoint in self.next:
             waypoint.prev.add(self)
         self.prev = set()

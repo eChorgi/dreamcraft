@@ -6,7 +6,7 @@ import re
 import minecraft_launcher_lib
 import sys
 from dreamcraft.config import BASE_DIR, LOG_DIR, CACHE_DIR
-from .subprocess_manager import SubprocessManager
+from .subprocess_runner import SubprocessRunner
 
 
 class MinecraftInstance:
@@ -68,7 +68,7 @@ class MinecraftInstance:
         # - ready_match: 日志命中后视为服务已监听端口；
         # - callback_match: 检测到 bot 离开事件时，联动停止 Mineflayer；
         # - finished_callback: 进程结束时也执行同样清理。
-        self.mc_process = SubprocessManager(
+        self.mc_process = SubprocessRunner(
             commands=self.mc_command,
             name="minecraft",
             ready_match=r"Started serving on (\d+)",
@@ -76,25 +76,6 @@ class MinecraftInstance:
             callback=stop_mineflayer,
             callback_match=r"\[Server thread/INFO\]: bot left the game",
             finished_callback=stop_mineflayer,
-        )
-
-    def get_mineflayer_process(self, server_port):
-        """构造 Mineflayer 子进程监控器（当前类中未直接使用，保留为扩展接口）。
-
-        备注：在当前项目中，Mineflayer 通常由 `VoyagerEnv` 单独创建并管理；
-        本方法提供了同构创建方式，便于未来将职责收敛到同一对象。
-        """
-        (LOG_DIR / "mineflayer").mkdir(parents=True, exist_ok=True)
-        file_path = Path(__file__).resolve().parent
-        return SubprocessManager(
-            commands=[
-                "node",
-                BASE_DIR / "lib" / "mineflayer" / "index.js",
-                str(server_port),
-            ],
-            name="mineflayer",
-            ready_match=r"Server started on port (\d+)",
-            log_path=LOG_DIR / "mineflayer",
         )
 
     def get_mc_command(self):

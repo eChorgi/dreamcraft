@@ -119,8 +119,8 @@ class ToolRepo:
             str_list = []
             for r in result:
                 l2_dist = r['l2_distance']
-                str_list.append(f"{{\ndocument: {r['document'].json},\nl2_distance: {l2_dist:.2f}\n}}")
-            return "[\n"+"\n".join(str_list)+"\n]"
+                str_list.append(f"{{\n'document': {r['document'].json},\n'l2_distance': {l2_dist:.2f}\n}}")
+            return "[\n"+",\n".join(str_list)+"\n]"
 
         @tool("query_skill",
             description=
@@ -148,8 +148,8 @@ class ToolRepo:
             str_list = []
             for r in result:
                 l2_dist = r['l2_distance']
-                str_list.append(f"{{\nskill: {r['skill'].json},\nl2_distance: {l2_dist:.2f}\n}}")
-            return "[\n"+"\n".join(str_list)+"\n]"
+                str_list.append(f'{{\n"skill": {json.dumps(r["skill"].json)},\n"l2_distance": {l2_dist:.2f}\n}}')
+            return "[\n"+",\n".join(str_list)+"\n]"
 
         # @tool("expand_path") # 简单参数也可以不写 Schema 类
         # @need_thought

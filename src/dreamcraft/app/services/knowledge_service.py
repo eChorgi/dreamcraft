@@ -5,10 +5,11 @@ from dreamcraft.app.protocols import ILLMClient, IWikiRepo, ISkillRepo
 
 
 class KnowledgeService:
-    def __init__(self, wiki: IWikiRepo = None, llm: ILLMClient = None, skill: ISkillRepo = None):
+    def __init__(self, settings, wiki: IWikiRepo = None, llm: ILLMClient = None, skill: ISkillRepo = None):
         self.wiki = wiki
         self.llm = llm
         self.skill = skill
+        self.skill_js_dir = settings.skill_js_dir
 
     def query_wiki(self, keyword, items=3) -> list[dict]:
         query_embedding = self.llm.embed(keyword)
@@ -40,3 +41,11 @@ class KnowledgeService:
     
     def read_wiki_section(self, file_name: str, section_title: str) -> str:
         return self.wiki.read_section(file_name, section_title)
+    
+    def load_js_skills(self):
+        all_s = self.skill.load_js_dir_skills(self.skill_js_dir)
+        self.skill.update_private_skills(all_s.private_skills)
+        for skill in all_s.skills:
+            if skill not in self.skill.skills:
+                self.add_skill(skill)
+        self.skill.update_all_dependencies()

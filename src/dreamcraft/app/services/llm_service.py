@@ -1,7 +1,7 @@
 import json
 import re
 from typing import List, Union
-from rich import print as rprint    
+from dreamcraft.utils.print_helper import ipynb_print
 
 import concurrent
 
@@ -39,7 +39,7 @@ class LLMService:
         total_tokens = 0
         cached_tokens = 0
         reason = ""
-
+        full_messages = history_messages if history_messages is not None else []
         messages = history_messages if history_messages is not None else []
         if messages and not isinstance(messages[0], SystemMessage):
             # 如果历史消息存在但第一个不是 SystemMessage，则把 prompt 插入到第一条
@@ -50,6 +50,7 @@ class LLMService:
         elif not messages:
             # 如果没有历史消息，直接添加 SystemMessage
             messages.append(SystemMessage(content=prompt))  # 首先把 prompt 作为上下文输入
+            full_messages.append(SystemMessage(content=prompt))
 
         error_count = 0
         current_iteration = 0
@@ -63,6 +64,7 @@ class LLMService:
             # 1. 把全套历史记录喂给 LLM
             ai_msg = llm_with_tools.invoke(messages)
             messages.append(ai_msg) # 把 LLM 的回复（不管是不是工具调用）记录到历史中
+            full_messages.append(ai_msg)
             token_usage = ai_msg.response_metadata.get("token_usage", 0)
             prompt_tokens_details = token_usage.get("prompt_tokens_details", {})
             total_tokens += token_usage.get("total_tokens", 0)
@@ -75,7 +77,6 @@ class LLMService:
                     parsed_result = parser(result)
                     
                     if parsed_result is not None:
-                        print(f"完整的交互历史: {rprint(messages)}")    
                         print(f"提取到的最终答案是: {parsed_result}")
                         if "【Reason】" in ai_msg.content:
                             reason = ai_msg.content.split("【Reason】")[-1].split("【Final Answer】")[0].strip()
@@ -83,6 +84,7 @@ class LLMService:
                         break
                     
                     messages.append(HumanMessage(content=f"⚠️ 系统拦截：你的回答严重违规! {error_msg}"))
+                    full_messages.append(HumanMessage(content=f"⚠️ 系统拦截：你的回答严重违规! {error_msg}"))
                     max_iterations += 1
                     error_count += 1
                 else :
@@ -93,6 +95,7 @@ class LLMService:
                         "或者输出详尽的 Final Answer 结束任务。不要在文本里汇报 '已调用'！"
                     )
                     messages.append(HumanMessage(content=warning_msg))
+                    full_messages.append(HumanMessage(content=warning_msg))
                     max_iterations += 1
                     error_count += 1
                     continue
@@ -134,12 +137,17 @@ class LLMService:
             # 2. 严格按照 ai_msg.tool_calls 的原始顺序，把 ToolMessage 加入到消息列表
             for tool_call in ai_msg.tool_calls:
                 obs = tool_results_dict[tool_call["id"]]
-                clean_obs = obs.replace("\'", '"').strip() if isinstance(obs, str) else str(obs)
+                # clean_obs = obs.replace("\'", '"').strip() if isinstance(obs, str) else str(obs)
+                clean_obs = obs.strip() if isinstance(obs, str) else str(obs)
                 messages.append(ToolMessage(
                     content=clean_obs,
                     tool_call_id=tool_call["id"]
                 ))
-            rprint(messages)
+                full_messages.append(ToolMessage(
+                    content=clean_obs,
+                    tool_call_id=tool_call["id"]
+                ))
+            print(full_messages)
             # 3. 处理上下文压缩 (在完整的对话回合结束时进行)
             if summary_content and current_iteration > 0:
                 len_sum = sum(len(m.content) for m in messages if hasattr(m, 'content') and m.content)
@@ -165,9 +173,10 @@ class LLMService:
 
         print(f"本次交互使用了 {total_tokens} tokens。")
         print(f"其中 {cached_tokens} tokens 来自上下文缓存，{total_tokens - cached_tokens} tokens 来自本次输入。")
+        ipynb_print(full_messages, exclude=["response_metadata", "id", "tool_call_id"])
         return {
             "result": parsed_result,
-            "messages": messages,
+            "messages": full_messages,
             "reason": reason
         }
     
@@ -319,6 +328,33 @@ class LLMService:
         return response["result"]
     
     def check_granularity(
+        self, 
+        target: Waypoint | str, 
+        snapshot: Snapshot, 
+        max_iterations: int = 10, 
+        max_retries: int = 5, 
+        enable_context_compression: bool = True
+        ) -> bool:
+        def parse_bool(text):
+            if "True" in text: return True
+            if "False" in text: return False
+            return None
+
+        response = self.react(
+            prompt = self.prompt.granularity_check(
+                target = target,
+                snapshot = snapshot,
+                enable_context_compression=enable_context_compression
+            ),
+            parser = parse_bool,
+            error_msg="请直接明确回复 'True' 或 'False'，不要输出其他内容。",
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
+            max_iterations = max_iterations,
+            max_retries = max_retries,
+        )
+        return response["result"]
+    
+    def generate_code(
         self, 
         target: Waypoint | str, 
         snapshot: Snapshot, 

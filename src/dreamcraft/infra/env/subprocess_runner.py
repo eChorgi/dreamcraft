@@ -10,7 +10,7 @@ import logging
 import threading
 
 
-class SubprocessManager:
+class SubprocessRunner:
     """子进程监控器：负责启动、观察、回调和停止一个外部进程。
 
     设计目标：

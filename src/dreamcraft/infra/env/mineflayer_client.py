@@ -7,8 +7,8 @@ import gymnasium as gym
 
 from pathlib import Path
 from dreamcraft.config import BASE_DIR, LOG_DIR
-from dreamcraft.infra.env.subprocess_manager import SubprocessManager
-from dreamcraft.infra.env.minecraft_launcher import MinecraftInstance
+from dreamcraft.infra.env.subprocess_runner import SubprocessRunner
+from dreamcraft.infra.env.minecraft_instance import MinecraftInstance
 from typing import SupportsFloat, Any, Tuple, Dict
 from gymnasium.core import ObsType
 
@@ -46,7 +46,7 @@ class MineflayerClient(gym.Env):
         self.request_timeout = settings.mineflayer_request_timeout
         self.log_path = log_path
         # 启动并监控 Mineflayer 子进程（负责和 Minecraft 世界交互）。
-        self.mineflayer = self.get_mineflayer_process(settings.mineflayer_port)
+        self.mineflayer = self.get_mineflayer_process(settings.mineflayer_path, settings.mineflayer_port)
         if settings.azure_login:
             # 按需创建 Minecraft 实例对象（未必立即运行）。
             self.mc_instance = self.get_mc_instance()
@@ -62,21 +62,25 @@ class MineflayerClient(gym.Env):
         self.server_paused = False
 
 
-    def get_mineflayer_process(self, server_port):
-        """构建并返回 Mineflayer 子进程监控器。"""
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-        current_dir = Path(__file__).resolve().parent
-        return SubprocessManager(
+    def get_mineflayer_process(self, mineflayer_path, server_port):
+        """构造 Mineflayer 子进程监控器（当前类中未直接使用，保留为扩展接口）。
+
+        备注：在当前项目中，Mineflayer 通常由 `VoyagerEnv` 单独创建并管理；
+        本方法提供了同构创建方式，便于未来将职责收敛到同一对象。
+        """
+        (LOG_DIR / "mineflayer").mkdir(parents=True, exist_ok=True)
+        file_path = Path(__file__).resolve().parent
+        return SubprocessRunner(
             commands=[
                 "node",
-                str(BASE_DIR/ 'lib' / "mineflayer" / "index.js"),
+                mineflayer_path,
                 str(server_port),
             ],
             name="mineflayer",
             ready_match=r"Server started on port (\d+)",
-            log_path = LOG_DIR / "mineflayer",
+            log_path=LOG_DIR / "mineflayer",
         )
-    
+
     def get_mc_instance(self):
         """构建 MinecraftInstance，用于需要时拉起真实 Minecraft 客户端。"""
         print("Creating Minecraft server")

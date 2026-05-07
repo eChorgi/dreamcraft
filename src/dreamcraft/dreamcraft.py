@@ -2,7 +2,7 @@ import os
 from typing import Dict
 
 from dreamcraft.app.core.messaging import Mailbox
-from dreamcraft.app.core.quest_runner import QuestRunner
+from dreamcraft.app.core.quest_executor import QuestRunner
 from dreamcraft.app.core.quest_orchestrator import QuestOrchestrator
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, ISkillRepo, IToolRepo, IWikiRepo
 from dreamcraft.app.services.llm_service import LLMService
@@ -12,7 +12,7 @@ from dreamcraft.infra.repo.skill_repo import SkillRepo
 from dreamcraft.config import settings
 from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.app.services.knowledge_service import KnowledgeService
-from dreamcraft.infra.env.mineflayer import MineflayerClient
+from dreamcraft.infra.env.mineflayer_client import MineflayerClient
 from dreamcraft.infra.llm.openai_llm import LLMClient
 from dreamcraft.infra.repo.quest_repo import QuestRepo
 from dreamcraft.infra.repo.prompt_repo import PromptRepo
@@ -58,7 +58,7 @@ def bootstrap():
     i_skill = SkillRepo(settings)
 
     # 初始化服务层组件
-    s_knowledge = KnowledgeService(wiki=i_wiki, llm=i_llm, skill=i_skill)
+    s_knowledge = KnowledgeService(settings, wiki=i_wiki, llm=i_llm, skill=i_skill)
     s_quest = QuestService(quests=i_quest)
 
     # 初始化工具管理器
@@ -101,15 +101,15 @@ class DreamCraft:
         """
         DreamCraft 主类，负责整体协调和管理。
         """
-        env = MineflayerClient(settings, mc_port=mc_port, azure_login=azure_login)
         
         self.container = bootstrap()
+        self.bot = MineflayerClient(settings, mc_port=mc_port, azure_login=azure_login)
 
     def learn(self, reset_env=True):
-        self.env.reset(
+        self.bot.reset(
             options={
                 "mode": "hard",
                 "wait_ticks": self.env_wait_ticks,
             }
         )
-        self.last_events = self.env.step("")
+        self.last_events = self.bot.step("")
