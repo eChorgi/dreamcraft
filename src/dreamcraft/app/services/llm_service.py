@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+from string import Template
 import esprima
 from typing import List, Union
 from dreamcraft.utils.print_helper import ipynb_print
@@ -400,8 +401,17 @@ class LLMService:
         def parse_js(text):
             result = None
             reason = None
+            if text.startswith("```js") and text.endswith("```"):
+                text = text[5:-3].strip()
+            elif text.startswith("```") and text.endswith("```"):
+                text = text[3:-3].strip()
+            elif text.startswith("```javascript") and text.endswith("```"):
+                text = text[11:-3].strip()
+
+            js_template = Template("(async () => { $code_body })();")
+            final_js = js_template.substitute(code_body=text)
             try:
-                parsed = esprima.parseScript(text)
+                parsed = esprima.parseScript(final_js)
                 result = text
             except Exception as e:
                 reason = f"生成的代码无法通过语法检查，错误信息: {str(e)}"
@@ -418,7 +428,7 @@ class LLMService:
                 enable_context_compression=enable_context_compression
             ),
             parser = parse_js,
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section", "query_skills"] + (["summary"] if enable_context_compression else []),
+            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section", "query_skill"] + (["summary"] if enable_context_compression else []),
             max_iterations = max_iterations,
             max_retries = max_retries,
         )

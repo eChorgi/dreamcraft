@@ -9,7 +9,7 @@ from dreamcraft.config import BASE_DIR, LOG_DIR, CACHE_DIR
 from .subprocess_runner import SubprocessRunner
 
 
-class MinecraftInstance:
+class MinecraftAzureInstance:
     """Minecraft 客户端/服务进程封装器。
 
     该类负责：

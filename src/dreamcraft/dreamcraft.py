@@ -2,6 +2,7 @@ import os
 from typing import Dict
 
 from dreamcraft.app.core.messaging import MessageBus
+from dreamcraft.app.core.quest_executor import QuestExecutor
 from dreamcraft.app.core.quest_orchestrator import QuestOrchestrator
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, ISkillRepo, IToolRepo, IWikiRepo
 from dreamcraft.app.services.llm_service import LLMService
@@ -11,7 +12,7 @@ from dreamcraft.infra.repo.skill_repo import SkillRepo
 from dreamcraft.config import settings
 from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.app.services.knowledge_service import KnowledgeService
-from dreamcraft.infra.env.mineflayer_client import MineflayerClient
+from dreamcraft.infra.env.mineflayer_client import MinecraftClient
 from dreamcraft.infra.llm.openai_llm import LLMClient
 from dreamcraft.infra.repo.quest_repo import QuestRepo
 from dreamcraft.infra.repo.prompt_repo import PromptRepo
@@ -30,7 +31,7 @@ def bootstrap():
     class ServiceContainer(GlobalContainer):
         knowledge: KnowledgeService
         quest: QuestService
-        llm: LLMServiceMock
+        llm: LLMService
         orchestrator: QuestOrchestrator
 
 
@@ -62,8 +63,8 @@ def bootstrap():
     s_llm = LLMService(llm=i_llm, prompt=i_prompt, tool=i_tools, quest=i_quest)
 
     # 初始化 Orchestrator
-    s_quest = QuestOrchestrator(s_quest=s_quest, llm=s_llm, prompt=i_prompt, bus=message_bus)
-    # o_action = QuestRunner(inbox=action_inbox,outbox=quest_inbox)
+    s_orchestrator = QuestOrchestrator(s_quest=s_quest, llm=s_llm, prompt=i_prompt, bus=message_bus)
+    s_executor = QuestExecutor(bus=message_bus, quest=s_quest, llm=s_llm, knowledge=s_knowledge)
 
     container.register("infra", infra)
     container.register("service", service)
@@ -76,6 +77,8 @@ def bootstrap():
     service.register("knowledge", s_knowledge)
     service.register("quest", s_quest)
     service.register("llm", s_llm)
+    service.register("orchestrator", s_orchestrator)
+    service.register("executor", s_executor)
 
     return container
 
@@ -95,7 +98,7 @@ class DreamCraft:
         """
         
         self.container = bootstrap()
-        self.bot = MineflayerClient(settings, mc_port=mc_port, azure_login=azure_login)
+        self.bot = MinecraftClient(settings, mc_port=mc_port, azure_login=azure_login)
 
     def learn(self, reset_env=True):
         self.bot.reset(

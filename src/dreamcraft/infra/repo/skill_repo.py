@@ -49,11 +49,11 @@ class SkillRepo:
                 description_lines.append(line.strip()[2:])
             elif line.strip().startswith('/*'):
                 is_comment = True
-                description_lines.append(line.strip()[2:])
+                description_lines.append(line.strip()[2:].lstrip(" *"))
             elif is_comment:
                 if line.strip().endswith('*/'):
                     is_comment = False
-                    description_lines.append(line.strip()[:-2])
+                    description_lines.append(line.strip()[:-2].lstrip(" *"))
                 else:
                     line = line.lstrip(" *")
                     description_lines.append(line.strip())
@@ -107,7 +107,7 @@ class SkillRepo:
     def update_dependencies(self, skill: Skill):
         if not skill.function:
             return
-        
+        skill.dependencies = set()
         for search_skill in list(dict.fromkeys(self.skills + self.private_skills)):
             if not search_skill.function or search_skill.name == skill.name:
                 continue
@@ -118,16 +118,6 @@ class SkillRepo:
     def update_all_dependencies(self):
         for skill in self.skills + self.private_skills:
             self.update_dependencies(skill)
-    
-    def inject_dependencies(self, code: str):
-        dep = set()
-        for skill in self.skills:
-            if skill.name.split('(')[0].split('function')[-1] in code:
-                dep.add(skill)
-                dep.update(skill.resolve_dependencies())
-        for s in dep:
-            code += f"\n\n{s.function}"
-        return code
 
     def load_skills_from_json(self, json_path):
         if not json_path.exists():

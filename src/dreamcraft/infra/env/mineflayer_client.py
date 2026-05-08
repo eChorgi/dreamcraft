@@ -3,55 +3,42 @@ import requests
 import warnings
 import json
 
-import gymnasium as gym
-
 from pathlib import Path
 from dreamcraft.config import BASE_DIR, LOG_DIR
+from dreamcraft.domain.snapshot import Snapshot
 from dreamcraft.infra.env.subprocess_runner import SubprocessRunner
-from dreamcraft.infra.env.minecraft_instance import MinecraftInstance
-from typing import SupportsFloat, Any, Tuple, Dict
-from gymnasium.core import ObsType
+from dreamcraft.infra.env.minecraft_instance import MinecraftAzureInstance
+from typing import Any, Tuple, Dict
 
 
-class MineflayerClient(gym.Env):
+class MinecraftClient():
     def __init__(
         self,
         settings,
         mc_port: int = None,
         azure_login: Dict[str, str] = None,
-        server_host="http://127.0.0.1",
+        mineflayer_host="http://127.0.0.1",
         log_path="./logs",
     ):
-        """初始化环境桥接对象。
 
-        参数说明：
-        - mc_port: 已存在 Minecraft 服务端口；
-        - azure_login: 启动新 Minecraft 实例所需的登录配置；
-        - server_host/server_port: Mineflayer HTTP 服务地址；
-        - request_timeout: HTTP 请求超时时间（秒）；
-        - log_path: 日志输出目录。
-        """
-        # 必须二选一：要么连已有端口，要么提供登录信息来拉起实例。
         if not mc_port and not azure_login:
             raise ValueError("必须提供 mc_port 或 azure_login 来启动 Minecraft 实例")
-        # 同时提供时，优先使用 azure_login 启动的实例端口。
         if mc_port and azure_login:
             warnings.warn(
                 "azure和Minecraft端口同时提供，优先使用azure启动Minecraft实例"
             )
         self.mc_port = mc_port
         self.azure_login = azure_login
-        self.server = f"{server_host}:{settings.mineflayer_port}"
-        self.server_port = settings.mineflayer_port
+        self.mineflayer_server = f"{mineflayer_host}:{settings.mineflayer_port}"
+        self.mineflayer_port = settings.mineflayer_port
         self.request_timeout = settings.mineflayer_request_timeout
         self.log_path = log_path
-        # 启动并监控 Mineflayer 子进程（负责和 Minecraft 世界交互）。
         self.mineflayer = self.get_mineflayer_process(settings.mineflayer_path, settings.mineflayer_port)
         if settings.azure_login:
             # 按需创建 Minecraft 实例对象（未必立即运行）。
-            self.mc_instance = self.get_mc_instance()
+            self.azure_instance = self.get_mc_instance()
         else:
-            self.mc_instance = None
+            self.azure_instance = None
         # 是否至少完成过一次 reset；step 前必须为 True。
         self.has_reset = False
         # 保存最近一次 reset 传给后端的配置，供重连时复用。
@@ -63,13 +50,7 @@ class MineflayerClient(gym.Env):
 
 
     def get_mineflayer_process(self, mineflayer_path, server_port):
-        """构造 Mineflayer 子进程监控器（当前类中未直接使用，保留为扩展接口）。
-
-        备注：在当前项目中，Mineflayer 通常由 `VoyagerEnv` 单独创建并管理；
-        本方法提供了同构创建方式，便于未来将职责收敛到同一对象。
-        """
         (LOG_DIR / "mineflayer").mkdir(parents=True, exist_ok=True)
-        file_path = Path(__file__).resolve().parent
         return SubprocessRunner(
             commands=[
                 "node",
@@ -81,28 +62,15 @@ class MineflayerClient(gym.Env):
             log_path=LOG_DIR / "mineflayer",
         )
 
-    def get_mc_instance(self):
-        """构建 MinecraftInstance，用于需要时拉起真实 Minecraft 客户端。"""
-        print("Creating Minecraft server")
-        (LOG_DIR / "minecraft").mkdir(parents=True, exist_ok=True)
-        return MinecraftInstance(
-            **self.azure_login,
-            mineflayer=self.mineflayer,
-            log_path = LOG_DIR / "minecraft",
-        )
     
     def check_process(self):
         """确保 Minecraft/Mineflayer 进程可用，并在需要时执行后端 start。"""
         # 如果启用了 mc_instance 且当前未运行，则先拉起 Minecraft。
-        if self.mc_instance and not self.mc_instance.is_running:
-            # if self.mc_instance:
-            #     self.mc_instance.check_process()
-            #     if not self.mc_instance.is_running:
+        if self.azure_instance and not self.azure_instance.is_running:
             print("正在启动 Minecraft 服务器...")
-            self.mc_instance.run()
-            self.mc_port = self.mc_instance.port
-            # 重连时把最新端口写回 reset 参数，保证后端连到正确实例。
-            self.reset_options["port"] = self.mc_instance.port
+            self.azure_instance.run()
+            self.mc_port = self.azure_instance.port
+            self.reset_options["port"] = self.azure_instance.port
             print(f"捕获到 Minecraft 服务器端口为: {self.reset_options['port']}")
         retry = 0
         # Mineflayer 挂掉时循环重启；启动后通知后端 /start 建立会话。
@@ -116,7 +84,7 @@ class MineflayerClient(gym.Env):
                     continue
             print(self.mineflayer.ready_line)
             res = requests.post(
-                f"{self.server}/start",
+                f"{self.mineflayer_server}/start",
                 json=self.reset_options,
                 timeout=self.request_timeout,
             )
@@ -129,24 +97,19 @@ class MineflayerClient(gym.Env):
             return res.json()
     
     
-    def step(
+    def execute(
         self,
         code: str,
-        programs: str = "",
-    ) -> Tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
-        """执行一步：发送代码到后端，返回环境观测结果。"""
-        if not self.has_reset:
-            raise RuntimeError("必须先调用 reset() 来初始化环境")
-        # 每一步前都先确保后端进程健康可用。
+    ) -> Snapshot:
+        """执行代码：发送代码到后端，返回环境观测结果。"""
         self.check_process()
         # 执行前恢复运行态，避免在暂停态下 step 无效。
         # self.unpause()
         data = {
-            "code": code,
-            "programs": programs,
+            "code": code
         }
         res = requests.post(
-            f"{self.server}/step", json=data, timeout=self.request_timeout
+            f"{self.mineflayer_server}/step", json=data, timeout=self.request_timeout
         )
         if res.status_code != 200:
             raise RuntimeError(f"调用 Minecraft 服务器失败，状态码: {res.status_code}")
@@ -164,7 +127,7 @@ class MineflayerClient(gym.Env):
         *,
         seed=None,
         options=None,
-    ) -> Tuple[ObsType, Dict[str, Any]]:
+    ) -> Snapshot:
         """重置环境并返回初始观测。
 
         支持 hard/soft 重置、初始背包、装备、出生点等配置。
@@ -204,18 +167,18 @@ class MineflayerClient(gym.Env):
         """关闭会话与子进程，释放资源。"""
         self.unpause()
         if self.connected:
-            res = requests.post(f"{self.server}/stop")
+            res = requests.post(f"{self.mineflayer_server}/stop")
             if res.status_code == 200:
                 self.connected = False
-        if self.mc_instance:
-            self.mc_instance.stop()
+        if self.azure_instance:
+            self.azure_instance.stop()
         self.mineflayer.stop()
         return not self.connected
 
     def pause(self):
         """将后端切换到暂停态，并同步本地状态位。"""
         if self.mineflayer.is_running and not self.server_paused:
-            res = requests.post(f"{self.server}/pause")
+            res = requests.post(f"{self.mineflayer_server}/pause")
             if res.status_code == 200:
                 self.server_paused = True
         return self.server_paused
@@ -224,7 +187,7 @@ class MineflayerClient(gym.Env):
         """将后端从暂停态切回运行态，并同步本地状态位。"""
         if self.mineflayer.is_running and self.server_paused:
             # 后端使用同一个 /pause 接口做状态切换，再次调用即“恢复”。
-            res = requests.post(f"{self.server}/pause")
+            res = requests.post(f"{self.mineflayer_server}/pause")
             if res.status_code == 200:
                 self.server_paused = False
             else:

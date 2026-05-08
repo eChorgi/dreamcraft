@@ -48,4 +48,18 @@ class KnowledgeService:
         for skill in all_s.skills:
             if skill not in self.skill.skills:
                 self.add_skill(skill)
+            else:
+                skill.skills_dict[skill.name] = skill
+                print(f"更新技能 {skill.name} 的信息，但不更新向量和索引")
         self.skill.update_all_dependencies()
+
+        
+    def inject_dependencies(self, code: str):
+        dep = set()
+        for skill in self.skill.skills:
+            if skill.name.split('(')[0].split('function')[-1] in code:
+                dep.add(skill)
+                dep.update(skill.resolve_dependencies())
+        for s in dep:
+            code += f"\n\n{s.function}"
+        return code

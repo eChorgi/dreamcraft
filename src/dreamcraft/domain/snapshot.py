@@ -2,46 +2,66 @@ from dataclasses import dataclass
 from typing import Dict, List
 import json
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
+from dataclasses import dataclass
+from typing import List, Dict, Optional, Any
 
+class Vec3(BaseModel):
+    """用于表示三维空间中的坐标或速度向量"""
+    x: float
+    y: float
+    z: float
 
-@dataclass
-class Snapshot:
-    inventory: Dict[str, int]
-    equipment: Dict[str, str]
-    health: int
-    hunger: int
-    entities: List[str]
+class Status(BaseModel):
+    """机器人的实时生理与物理状态"""
+    health: float
+    food: float
+    saturation: float
+    position: Vec3
+    velocity: Vec3
+    yaw: float
+    pitch: float
+    onGround: bool
+    equipment: List[Optional[str]]
+    name: str
+    isInWater: bool
+    isInLava: bool
+    isCollidedHorizontally: bool
+    isCollidedVertically: bool
+    biome: str
+    entities: Dict[str, float]
+    timeOfDay: str
+    inventoryUsed: int
+    elapsedTime: float
+
+class Observation(BaseModel):
+    """最外层的全局快照 (Snapshot)"""
     voxels: List[str]
-    extra_info: str
+    status: Status
+    inventory: Dict[str, int]
+    nearbyChests: Dict[str, str]
+    blockRecords: List[Any]
+
+class Snapshot(BaseModel):
+    inventoryUsed: int
+    inventory: Dict[str, int]
+    equipment: List[Optional[str]]
+    position: Vec3
+    nearbyChests: Dict[str, str]
+    voxels: List[str]
+    health: int
+    saturation: int
+    food: int
+    entities: Dict[str, float]
+    extra_info: Optional[str] = None
     
     @property
     def dict(self):
-        return {
-            "inventory": self.inventory,
-            "equipment": self.equipment,
-            "health": self.health,
-            "hunger": self.hunger,
-            "entities": self.entities,
-            "voxels": self.voxels,
-            "extra_info": self.extra_info
-        }
+        return self.model_dump()
     
     @property
     def json(self):
-        return json.dumps(self.dict, ensure_ascii=False)
-    
-    @property
-    def details(self):
-        return {
-            "inventory": self.inventory,
-            "equipment": self.equipment,
-            "health": self.health,
-            "hunger": self.hunger,
-            "entities": self.entities,
-            "voxels": self.voxels,
-            "extra_info": self.extra_info
-        }
+        return self.model_dump_json(ensure_ascii=False)
     
     @property
     @staticmethod
@@ -50,10 +70,20 @@ class Snapshot:
             "type": "object",
             "properties": {
                 "inventory": {"type": "object", "additionalProperties": {"type": "integer"}},
-                "equipment": {"type": "object", "additionalProperties": {"type": "string"}},
+                "position": {
+                    "type": "object",
+                    "properties": {
+                        "x": {"type": "number"},
+                        "y": {"type": "number"},
+                        "z": {"type": "number"}
+                    }
+                },
+                "nearbyChests": {"type": "object", "additionalProperties": {"type": "string"}},
+                "equipment": {"type": "array", "items": {"type": ["string", "null"]}},
                 "health": {"type": "integer"},
-                "hunger": {"type": "integer"},
-                "entities": {"type": "array", "items": {"type": "string"}},
+                "saturation": {"type": "integer"},
+                "food": {"type": "integer"},
+                "entities": {"type": "object", "additionalProperties": {"type": "number"}},
                 "voxels": {"type": "array", "items": {"type": "string"}},
                 "extra_info": {"type": "string"}
             },
@@ -61,23 +91,26 @@ class Snapshot:
 
     @staticmethod
     def parse(json_str: str) -> 'Snapshot':
-        adapter = TypeAdapter(Snapshot)
         try:
-            data = json.loads(json_str)
-            snapshot = adapter.validate_python(data)
-        except (json.JSONDecodeError, ValidationError) as e:
-            print(f"⚠️ JSON 解析错误: {e}")
-            return None
+            snapshot = Snapshot.model_validate_json(json_str)
+            print("✅ JSON 完全符合格式，解析成功！")
+        except ValidationError as e:
+            print("❌ JSON 不符合格式，解析失败！")
+            print(e.errors()) 
         return snapshot
     
     @staticmethod
     def default():
         return Snapshot(
             inventory={},
-            equipment={},
+            inventoryUsed=0,
+            equipment=[None] * 6,
+            position=Vec3(x=0.0, y=0.0, z=0.0),
+            nearbyChests={},
             health=20,
-            hunger=20,
-            entities=[],
+            saturation=20,
+            food=20,
+            entities={},
             voxels=[],
             extra_info=""
         )

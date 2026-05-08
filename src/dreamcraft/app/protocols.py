@@ -44,9 +44,6 @@ class ISkillRepo(Protocol):
         ...
     def update_all_dependencies(self):
         ...
-    def inject_dependencies(self, code: str) -> str:
-        ...
-    
 
 class ILLMClient(Protocol):
     def embed(self, text: str) -> np.ndarray:

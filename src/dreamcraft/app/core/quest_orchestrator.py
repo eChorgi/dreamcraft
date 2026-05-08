@@ -4,6 +4,7 @@ from dreamcraft.app.core.quest_executor import QuestExecutor
 from dreamcraft.app.protocols import IPromptRepo
 from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.app.services.llm_service import LLMService
+from dreamcraft.domain.quest import Executable
 
 class OrchestratorState(StrEnum):
     INIT = auto()       # 初始化规划
@@ -33,7 +34,6 @@ class QuestOrchestrator:
     async def run(self, target: str):
         """状态机的主循环"""
         self.quest = self.quest_service.add_quest(target)
-        self.executor = QuestExecutor(bus=self.bus, quest=self.quest)
         current_state = OrchestratorState.INIT
         max_steps = 10000
 
@@ -56,13 +56,18 @@ class QuestOrchestrator:
         response = await self.llm.check_feasibility(
             completed = self.quest.completed,
             target = self.quest.next,
-            snapshot = self.quest.current.imaginated_snapshot
+            snapshot = self.quest.current.actual_snapshot if self.quest.current.actual_snapshot else self.quest.current.imaginated_snapshot
         )
         is_feasible = response["result"]
         self.quest.token_usage += response.get("token_usage", 0)['uncached_tokens']
         print(f"检查可行性结果: {is_feasible}")
         print(f"当前已使用 tokens: {self.quest.token_usage}")
         if is_feasible:
+            self.quest.exec_path.append(Executable(
+                waypoint=self.quest.next,
+                reason=response.get("reason", "")
+            ))
+            self.bus.send_to("executor", "execute")
             return OrchestratorState.IMAGINATE
         else:
             return OrchestratorState.CHECK_GRANULARITY
@@ -71,7 +76,7 @@ class QuestOrchestrator:
         response = await self.llm.imaginate(
             completed = self.quest.completed,
             target = self.quest.next,
-            snapshot = self.quest.current.imaginated_snapshot
+            snapshot = self.quest.current.actual_snapshot if self.quest.current.actual_snapshot else self.quest.current.imaginated_snapshot
         )
         imagined_snapshot = response["result"]
         self.quest.token_usage += response.get("token_usage", 0)['uncached_tokens']
@@ -90,7 +95,7 @@ class QuestOrchestrator:
     async def handle_check_granularity(self) -> OrchestratorState:
         response = await self.llm.check_granularity(
             target = self.quest.next,
-            snapshot = self.quest.current.imaginated_snapshot
+            snapshot = self.quest.current.actual_snapshot if self.quest.current.actual_snapshot else self.quest.current.imaginated_snapshot
         )
         is_granular = response["result"]
         self.quest.token_usage += response.get("token_usage", 0)['uncached_tokens']
@@ -105,7 +110,7 @@ class QuestOrchestrator:
     async def handle_navigate(self) -> OrchestratorState:
         response = await self.llm.navigate(
             target = self.quest.next,
-            snapshot = self.quest.current.imaginated_snapshot
+            snapshot = self.quest.current.actual_snapshot if self.quest.current.actual_snapshot else self.quest.current.imaginated_snapshot
         )
         next_waypoint = response["result"]
         self.quest.token_usage += response.get("token_usage", 0)['uncached_tokens']
@@ -123,7 +128,7 @@ class QuestOrchestrator:
         response = await self.llm.expand_path(
             completed = self.quest.completed,
             target = self.quest.next,
-            snapshot = self.quest.current.imaginated_snapshot
+            snapshot = self.quest.current.actual_snapshot if self.quest.current.actual_snapshot else self.quest.current.imaginated_snapshot
         )
         path_wps = response["result"]
         self.quest.token_usage += response.get("token_usage", 0)['uncached_tokens']

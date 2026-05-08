@@ -1,7 +1,7 @@
 from typing import Dict
 from dreamcraft.config import settings
 from dreamcraft.app.services.quest_service import QuestService
-from dreamcraft.infra.env.mineflayer_client import MineflayerClient
+from dreamcraft.infra.env.mineflayer_client import MinecraftClient
 from dreamcraft.infra.llm.openai_llm import LLMClient
 
 

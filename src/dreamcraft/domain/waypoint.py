@@ -56,9 +56,9 @@ class Waypoint:
         if self.description:
             _dict["description"] = self.description
         if self.imaginated_snapshot:
-            _dict["imaginated_snapshot"] = self.imaginated_snapshot.details
+            _dict["imaginated_snapshot"] = self.imaginated_snapshot.dict
         if self.actual_snapshot:
-            _dict["actual_snapshot"] = self.actual_snapshot.details
+            _dict["actual_snapshot"] = self.actual_snapshot.dict
         return _dict
     
     @property

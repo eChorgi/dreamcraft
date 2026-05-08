@@ -1,6 +1,8 @@
 from enum import StrEnum, auto
 
 from dreamcraft.app.core.messaging import MessageBus
+from dreamcraft.app.services.knowledge_service import KnowledgeService
+from dreamcraft.app.services.llm_service import LLMService
 from dreamcraft.domain.quest import Quest
 
 class ExecutorState(StrEnum):
@@ -11,11 +13,13 @@ class ExecutorState(StrEnum):
 
 
 class QuestExecutor:
-    def __init__(self, bus: MessageBus, quest: Quest):
+    def __init__(self, bus: MessageBus, quest: Quest, llm: LLMService, knowledge: KnowledgeService):
         self.bus = bus
         self.quest = quest
         self.inbox = bus.register("executor")
-    
+        self.llm = llm
+        self.knowledge = knowledge
+
     async def run(self):
         current_state = ExecutorState.INIT
         max_steps = 10000
@@ -39,8 +43,19 @@ class QuestExecutor:
             if len(self.quest.exec_path) > self.quest.exec_ind + 1:
                 return ExecutorState.GENERATE_CODE
 
-
     async def handle_generate_code(self) -> ExecutorState:
+        response = self.llm.generate_code(
+            target=self.quest.next,
+            snapshot=self.quest.current.actual_snapshot,
+            reason=self.quest.exec_path[self.quest.exec_ind + 1].reason
+        )
+        raw_code = response["result"]
+        final_code = self.knowledge.inject_dependencies(raw_code)
+        final_code = f"""
+            {final_code}
+        """
+        print(f"注入依赖函数后代码:\n{final_code}")
+        self.quest.token_usage += response.get("token_usage", 0)['uncached_tokens']
         
     
         
