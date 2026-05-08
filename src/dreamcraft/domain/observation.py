@@ -1,9 +1,7 @@
-from dataclasses import dataclass
 from typing import Dict, List
 import json
 
-from pydantic import BaseModel, TypeAdapter, ValidationError
-from dataclasses import dataclass
+from pydantic import BaseModel, ValidationError
 from typing import List, Dict, Optional, Any
 
 class Vec3(BaseModel):
@@ -14,9 +12,9 @@ class Vec3(BaseModel):
 
 class Status(BaseModel):
     """机器人的实时生理与物理状态"""
-    health: float
-    food: float
-    saturation: float
+    health: int
+    food: int
+    saturation: int
     position: Vec3
     velocity: Vec3
     yaw: float
@@ -41,6 +39,23 @@ class Observation(BaseModel):
     inventory: Dict[str, int]
     nearbyChests: Dict[str, str]
     blockRecords: List[Any]
+
+    @property
+    def snapshot(self) -> 'Snapshot':
+        """将 Observation 转换为 Snapshot，供 LLM 使用"""
+        return Snapshot(
+            inventoryUsed=self.status.inventoryUsed,
+            inventory=self.inventory,
+            equipment=self.status.equipment,
+            position=self.status.position,
+            nearbyChests=self.nearbyChests,
+            health=self.status.health,
+            saturation=self.status.saturation,
+            food=self.status.food,
+            entities=self.status.entities,
+            voxels=self.voxels,
+            extra_info=""
+        )
 
 class Snapshot(BaseModel):
     inventoryUsed: int

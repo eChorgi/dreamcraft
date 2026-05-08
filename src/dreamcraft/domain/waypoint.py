@@ -1,6 +1,5 @@
-import json
 from typing import TYPE_CHECKING, Union
-from dreamcraft.domain.snapshot import Snapshot
+from dreamcraft.domain.observation import Snapshot
 
 if TYPE_CHECKING:
     from dreamcraft.domain.quest import Quest  # 只有在静态检查时才导入

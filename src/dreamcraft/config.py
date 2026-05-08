@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     embedding_dimension: int = 1536
     temperature: float = 0.7
     request_timeout: int = 30
+    mineflayer_host: str = "http://127.0.0.1"
     mineflayer_port: int = 3000
+    mc_port: Optional[int] = 33333
     mineflayer_request_timeout: int = 600
     wiki_documents_path: Path = WIKI_DIR / "wiki_documents.json"
     wiki_md_path: Path = WIKI_DIR / "md"
@@ -37,6 +39,11 @@ class Settings(BaseSettings):
     snapshot_faiss_index_path: Path = DATA_DIR / "snapshot_faiss.index"
     path_pkl_path: Path = DATA_DIR / "paths.pkl"
     prompt_dir: Path = PROMPT_DIR
+
+    azure_client_id: Optional[str] = None
+    azure_secret_value: Optional[str] = None
+    azure_redirect_url: Optional[str] = "https://127.0.0.1/auth-response"
+    azure_minecraft_version: str = None
 
     class Config:
         env_file = ".env"

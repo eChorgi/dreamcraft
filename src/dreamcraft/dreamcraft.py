@@ -1,18 +1,16 @@
-import os
-from typing import Dict
-
-from dreamcraft.app.core.messaging import MessageBus
+from dreamcraft.app.core.message import MessageBus
 from dreamcraft.app.core.quest_executor import QuestExecutor
 from dreamcraft.app.core.quest_orchestrator import QuestOrchestrator
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, ISkillRepo, IToolRepo, IWikiRepo
 from dreamcraft.app.services.llm_service import LLMService
 from dreamcraft.app.services.llm_service_mock import LLMServiceMock
 from dreamcraft.container import GlobalContainer
+from dreamcraft.infra.env.azure_instance import AzureInstance
 from dreamcraft.infra.repo.skill_repo import SkillRepo
 from dreamcraft.config import settings
 from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.app.services.knowledge_service import KnowledgeService
-from dreamcraft.infra.env.mineflayer_client import MinecraftClient
+from dreamcraft.infra.env.minecraft_client import MinecraftClient
 from dreamcraft.infra.llm.openai_llm import LLMClient
 from dreamcraft.infra.repo.quest_repo import QuestRepo
 from dreamcraft.infra.repo.prompt_repo import PromptRepo
@@ -86,25 +84,22 @@ class DreamCraft:
     def __init__(
         self,
         mc_port: int = None,
-        azure_login: Dict[str, str] = None,
-        # openai_api_key: str = None,
-        # env_wait_ticks: int = 20,
-        # max_iterations: int = 160,
-        # reset_placed_if_failed: bool = False,
-        # action_agent_task_max_retries: int = 4,
+        azure_login: bool = False,
     ):
         """
         DreamCraft 主类，负责整体协调和管理。
         """
         
         self.container = bootstrap()
-        self.bot = MinecraftClient(settings, mc_port=mc_port, azure_login=azure_login)
+        azure_instance = None
+        if azure_login:
+            azure_instance = AzureInstance(settings = settings)
+        self.mc_client = MinecraftClient(settings, mc_port=mc_port, azure_instance=azure_instance)
 
     def learn(self, reset_env=True):
-        self.bot.reset(
+        self.mc_client.reset(
             options={
-                "mode": "hard",
-                "wait_ticks": self.env_wait_ticks,
+                "mode": "hard"
             }
         )
-        self.last_events = self.bot.step("")
+        self.last_events = self.mc_client.step("")

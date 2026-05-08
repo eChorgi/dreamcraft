@@ -1,9 +1,10 @@
 from enum import StrEnum, auto
 
-from dreamcraft.app.core.messaging import MessageBus
+from dreamcraft.app.core.message import MessageBus
 from dreamcraft.app.services.knowledge_service import KnowledgeService
 from dreamcraft.app.services.llm_service import LLMService
 from dreamcraft.domain.quest import Quest
+from dreamcraft.infra.env.minecraft_client import MinecraftClient
 
 class ExecutorState(StrEnum):
     INIT = auto()       # 初始化规划
@@ -13,12 +14,13 @@ class ExecutorState(StrEnum):
 
 
 class QuestExecutor:
-    def __init__(self, bus: MessageBus, quest: Quest, llm: LLMService, knowledge: KnowledgeService):
+    def __init__(self, bus: MessageBus, quest: Quest, llm: LLMService, knowledge: KnowledgeService, mc_client: MinecraftClient):
         self.bus = bus
         self.quest = quest
         self.inbox = bus.register("executor")
         self.llm = llm
         self.knowledge = knowledge
+        self.mc_client = mc_client
 
     async def run(self):
         current_state = ExecutorState.INIT

@@ -1,19 +1,14 @@
 import asyncio
-import json
-import re
 from string import Template
 import esprima
 from typing import List, Union
 from dreamcraft.utils.print_helper import ipynb_print
-
-import concurrent
-
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, IToolRepo
 from langchain.tools import tool
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 
 from dreamcraft.domain.waypoint import Waypoint
-from dreamcraft.domain.snapshot import Snapshot
+from dreamcraft.domain.observation import Snapshot
 
 class LLMService:
     """负责与 LLM 进行交互的服务类，提供一个统一的接口供 Orchestrator 调用"""
@@ -289,7 +284,7 @@ class LLMService:
         max_retries: int = 5, 
         enable_context_compression: bool = True
     ) -> dict:
-        def path_parser(text) -> list[Waypoint] | None:
+        def path_parser(text) -> dict:
             text_lines = text.strip().split("\n")
             waypoints = []
             for line in text_lines:
@@ -394,6 +389,7 @@ class LLMService:
         target: Waypoint | str, 
         snapshot: Snapshot, 
         reason: str,
+        error: str = None,
         max_iterations: int = 10, 
         max_retries: int = 5, 
         enable_context_compression: bool = True
@@ -425,6 +421,7 @@ class LLMService:
                 target = target,
                 snapshot = snapshot,
                 reason = reason,
+                error = error,
                 enable_context_compression=enable_context_compression
             ),
             parser = parse_js,

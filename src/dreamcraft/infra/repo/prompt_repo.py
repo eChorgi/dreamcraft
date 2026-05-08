@@ -1,8 +1,7 @@
-from dreamcraft.config import PROMPT_DIR
-from pathlib import Path
-
 from dreamcraft.domain.waypoint import Waypoint
-from dreamcraft.domain.snapshot import Snapshot
+from dreamcraft.domain.observation import Snapshot
+
+class BasePromptCon
 
 class PromptRepo:
     def __init__(self, settings):
@@ -101,11 +100,12 @@ class PromptRepo:
         )
         return prompt
     
-    def generate_code(self, target: Waypoint | str, snapshot: Snapshot, reason: str, enable_context_compression: bool = True) -> str:
+    def generate_code(self, target: Waypoint | str, snapshot: Snapshot, reason: str, error: str = "无", enable_context_compression: bool = True) -> str:
         """专门用于生成代码的 prompt 模板"""
         prompt = self.react(
             role = self.load("generate_code_role"),
             query = self.load("generate_code_query").format(
+                error = error,
                 target = target.details if isinstance(target, Waypoint) else target,
                 snapshot = snapshot.json,
                 reason = reason

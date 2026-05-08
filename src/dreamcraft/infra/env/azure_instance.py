@@ -1,16 +1,15 @@
-import os
 from pathlib import Path
 import json
 import re
 
 import minecraft_launcher_lib
 import sys
-from dreamcraft.config import BASE_DIR, LOG_DIR, CACHE_DIR
+from dreamcraft.config import LOG_DIR, CACHE_DIR
 from .subprocess_runner import SubprocessRunner
 
 
-class MinecraftAzureInstance:
-    """Minecraft 客户端/服务进程封装器。
+class AzureInstance:
+    """Minecraft Azure 客户端/服务进程封装器。
 
     该类负责：
     1) 准备 Minecraft 启动命令（含微软账号登录与 token 缓存）；
@@ -19,18 +18,13 @@ class MinecraftAzureInstance:
     4) 在 bot 退出或进程结束时触发 Mineflayer 停止，避免状态不一致。
 
     说明：
-    - 这里的 "MinecraftInstance" 更像一个“受控运行实例”，不是完整服务器管理器；
+    - 这里的 "AzureInstance" 更像一个“受控运行实例”，不是完整服务器管理器；
     - 它将复杂的登录、命令构造和进程生命周期细节封装起来，供上层直接调用。
     """
 
     def __init__(
         self,
-        client_id,
-        redirect_url,
-        secret_value,
-        version,
-        mineflayer,
-        log_path="logs",
+        settings,
     ):
         """初始化 Minecraft 实例封装。
 
@@ -38,44 +32,27 @@ class MinecraftAzureInstance:
         - client_id/redirect_url/secret_value: 微软 OAuth 登录参数；
         - version: 启动的 Minecraft 版本号（传给 launcher 库）；
         - mineflayer: 外部传入的 Mineflayer 监控对象，用于联动停止；
-        - log_path: Minecraft 日志目录。
         """
         # OAuth 与版本信息，后续构造启动命令时使用。
-        self.client_id = client_id
-        self.redirect_url = redirect_url
-        self.secret_value = secret_value
-        self.version = version
-        self.log_path = log_path
+        self.client_id = settings.azure_client_id
+        self.redirect_url = settings.azure_redirect_url
+        self.secret_value = settings.azure_secret_value
+        self.version = settings.azure_minecraft_version
 
         # Minecraft 默认安装目录（由 minecraft_launcher_lib 判定平台路径）。
         self.mc_dir = minecraft_launcher_lib.utils.get_minecraft_directory()
 
         # 启动后从日志解析得到监听端口；未启动前为 None。
-        self.port = None
-
-        def stop_mineflayer():
-            """辅助回调：在 Minecraft 生命周期变化时安全停止 Mineflayer。"""
-            print("停止Mineflayer...")
-            try:
-                mineflayer.stop()
-            except Exception as e:
-                print(e)
+        self.mc_port = None
 
         # 预先生成 Minecraft 启动命令（含登录信息）。
         self.mc_command = self.get_mc_command()
-
-        # 用统一监控器托管 Minecraft 进程：
-        # - ready_match: 日志命中后视为服务已监听端口；
-        # - callback_match: 检测到 bot 离开事件时，联动停止 Mineflayer；
-        # - finished_callback: 进程结束时也执行同样清理。
         self.mc_process = SubprocessRunner(
             commands=self.mc_command,
             name="minecraft",
             ready_match=r"Started serving on (\d+)",
-            log_path=self.log_path,
-            callback=stop_mineflayer,
+            log_path=LOG_DIR,
             callback_match=r"\[Server thread/INFO\]: bot left the game",
-            finished_callback=stop_mineflayer,
         )
 
     def get_mc_command(self):
@@ -157,8 +134,8 @@ class MinecraftAzureInstance:
         # ready_line 来自 SubprocessMonitor 捕获的“就绪日志行”。
         match = re.search(pattern, self.mc_process.ready_line)
         if match:
-            self.port = int(match.group(1))
-            print("捕获到 Minecraft 服务器端口为: ", self.port)
+            self.mc_port = int(match.group(1))
+            print("捕获到 Minecraft 服务器端口为: ", self.mc_port)
         else:
             # 启动成功但无法提取端口时，直接抛错给上层处理。
             raise RuntimeError("Minecraft 启动成功但未能捕获监听端口，请检查日志确认启动状态。")

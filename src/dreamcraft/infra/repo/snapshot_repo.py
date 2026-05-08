@@ -3,11 +3,7 @@ import os
 
 import faiss
 import numpy as np
-
-from dreamcraft.domain.quest import Quest
-import pickle
-
-from dreamcraft.domain.snapshot import Snapshot
+from dreamcraft.domain.observation import Snapshot
 
 
 class snapshotRepo:

@@ -1,8 +1,5 @@
 import json
-import pathlib
-import re
 import faiss
-import numpy as np
 
 from dreamcraft.domain.wiki import WikiDocument
 from dreamcraft.infra.utils import grep

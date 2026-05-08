@@ -1,7 +1,6 @@
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Dict, List, Union
-from dreamcraft.domain.snapshot import Snapshot
+from dreamcraft.domain.observation import Snapshot
 from dreamcraft.domain.waypoint import Waypoint
 
 @dataclass

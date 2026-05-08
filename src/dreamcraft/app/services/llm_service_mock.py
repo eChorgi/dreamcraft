@@ -11,7 +11,7 @@ from langchain.tools import tool
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 
 from dreamcraft.domain.waypoint import Waypoint
-from dreamcraft.domain.snapshot import Snapshot
+from dreamcraft.domain.observation import Snapshot
 
 class LLMServiceMock:
     """负责与 LLM 进行交互的服务类，提供一个统一的接口供 Orchestrator 调用"""

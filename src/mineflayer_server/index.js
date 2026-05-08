@@ -181,7 +181,13 @@ app.post("/start", (req, res) => {
 
 });
 
-
+app.get("/observe", async (req, res) => {
+    if (!bot) {
+        res.status(400).json({ error: "Bot 没有连接" });
+        return;
+    }
+    res.json(bot.observe());
+});
 
 // 执行一步任务：运行外部注入的 code/programs，返回新观测。
 app.post("/execute", async (req, res) => {
@@ -283,8 +289,6 @@ app.post("/execute", async (req, res) => {
             return err;
         }
     }
-    // res.json({ message: "Executed code, awaiting final observation..." });
-
     function handleError(err) {
         return err.message;
     }
@@ -355,7 +359,6 @@ app.post("/execute", async (req, res) => {
 app.get("/test", (req, res) => {
     res.json({ message: "Hello, world!" });
 });
-
 
 const DEFAULT_PORT = 3000;
 const PORT = process.argv[2] || DEFAULT_PORT;

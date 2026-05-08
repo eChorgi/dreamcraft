@@ -19,7 +19,7 @@ class Observation {
 
 function inject(bot, obs_list) {
     bot.obsList = [];
-    bot.cumulativeObs = [];
+    bot.cumulativeObs = null;
     bot.eventMemory = {};
     obs_list.forEach((obs) => {
         bot.obsList.push(new obs(bot));
@@ -32,12 +32,12 @@ function inject(bot, obs_list) {
             }
             result[obs.name] = obs.observe();
         });
-        bot.cumulativeObs.push([event_name, result]);
+        bot.cumulativeObs = result;
     };
     bot.observe = function () {
         bot.event("observe");
         const result = bot.cumulativeObs;
-        bot.cumulativeObs = [];
+        bot.cumulativeObs = null;
         return JSON.stringify(result);
     };
 }

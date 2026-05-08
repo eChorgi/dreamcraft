@@ -1,9 +1,6 @@
 import os
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.embeddings import DashScopeEmbeddings
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
 from langchain_core.runnables import Runnable
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage

@@ -1,6 +1,5 @@
 from enum import StrEnum, auto
-from dreamcraft.app.core.messaging import MessageBus
-from dreamcraft.app.core.quest_executor import QuestExecutor
+from dreamcraft.app.core.message import MessageBus
 from dreamcraft.app.protocols import IPromptRepo
 from dreamcraft.app.services.quest_service import QuestService
 from dreamcraft.app.services.llm_service import LLMService

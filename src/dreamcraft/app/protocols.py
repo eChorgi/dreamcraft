@@ -10,8 +10,7 @@ from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
 
 from dreamcraft.domain.skill import LoadJSResult, LoadJSResults, Skill
-from dreamcraft.domain.snapshot import Snapshot
-from dreamcraft.domain.wiki import WikiDocument
+from dreamcraft.domain.observation import Snapshot
 
 class IQuestRepo(Protocol):
     def add(self, quest: Quest):
