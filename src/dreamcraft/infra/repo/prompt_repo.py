@@ -100,3 +100,16 @@ class PromptRepo:
             enable_context_compression=enable_context_compression
         )
         return prompt
+    
+    def generate_code(self, target: Waypoint | str, snapshot: Snapshot, reason: str, enable_context_compression: bool = True) -> str:
+        """专门用于生成代码的 prompt 模板"""
+        prompt = self.react(
+            role = self.load("generate_code_role"),
+            query = self.load("generate_code_query").format(
+                target = target.details if isinstance(target, Waypoint) else target,
+                snapshot = snapshot.json,
+                reason = reason
+            ),
+            enable_context_compression=enable_context_compression
+        )
+        return prompt

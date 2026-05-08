@@ -93,8 +93,8 @@ class Waypoint:
         """
         if self.quest:
             self.quest.waypoints_append(waypoint)
-            if self.quest.target == self:
-                self.quest.target = waypoint
+            if self.quest.next == self:
+                self.quest.next = waypoint
         waypoint.next = set(self.next)
         waypoint.prev.add(self)
         self.next = set([waypoint])
@@ -105,8 +105,8 @@ class Waypoint:
         """
         if self.quest:
             self.quest.waypoints_append(waypoint)
-            if self.quest.target == self:
-                self.quest.target = waypoint
+            if self.quest.next == self:
+                self.quest.next = waypoint
         waypoint.prev.add(self)
         self.next.add(waypoint)
     

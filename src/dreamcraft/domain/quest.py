@@ -1,27 +1,52 @@
-from collections import deque
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Dict, List, Union
 from dreamcraft.domain.snapshot import Snapshot
 from dreamcraft.domain.waypoint import Waypoint
 
+@dataclass
+class Executable:
+    waypoint: Waypoint
+    reason: str = ""
+
+@dataclass
+class Edge:
+    wps: set[Waypoint]
+    def __hash__(self):
+        return hash(frozenset(self.wps))
+
 class Quest:
     def __init__(self, origin: Waypoint, target: Waypoint):
         self.origin = origin
         self.target = target
-        self.current = origin
         self.waypoints = []
 
-        self.executing: Waypoint | None = None
+        self.next = origin
+        self.current = origin
         self.snapshot = Snapshot.default()
 
-        self.completed: list[Waypoint] = []
-
-        self.executable_waypoints: set[Waypoint] = set()
-        self._block_reason = dict[frozenset[Waypoint],str]()
-        self.error_history = []
+        self.exec_path: list[Executable] = []
+        self.exec_ind: int | None = None
         self.step_count = 0
+        self.block_reason = dict[Edge, str]()
+        self.error_history = defaultdict(list)
+
+        self.token_usage = 0
+        self.history_log = []
 
         self.init()
+    
+    @property
+    def executing(self) -> Waypoint | None:
+        if self.exec_ind is not None and 0 <= self.exec_ind < len(self.exec_path):
+            return self.exec_path[self.exec_ind].waypoint
+        return None
+    
+    @property
+    def completed(self) -> list[Waypoint]:
+        if self.exec_ind is not None and 0 <= self.exec_ind < len(self.exec_path):
+            return [executable.waypoint for executable in self.exec_path[:self.exec_ind]]
+        return []
 
     @staticmethod
     def copy(quest: 'Quest') -> 'Quest':
@@ -44,7 +69,7 @@ class Quest:
             return new_waypoint
         
         new_start = _copy_waypoint(quest.origin)
-        new_final = mapping[quest.target]
+        new_final = mapping[quest.next]
         return Quest(new_start, new_final)
     
     @staticmethod
@@ -78,20 +103,22 @@ class Quest:
         return Quest(new_start, new_final) # final之后节点的裁剪操作在构造函数的init()方法中完成
     
     def set_edge_feasible(self, from_waypoint: Waypoint, to_waypoint: Waypoint,value: bool, reason: str = ""):
-        if value == False and self._block_reason.get(frozenset([from_waypoint, to_waypoint]), "None") != "None":
-            del self._block_reason[frozenset([from_waypoint, to_waypoint])]
+        edge = Edge(wps={from_waypoint, to_waypoint})
+        if value == False and self.block_reason.get(edge, "None") != "None":
+            del self.block_reason[edge]
         elif value == True:
-            self._block_reason[frozenset([from_waypoint, to_waypoint])] = reason
+            self.block_reason[edge] = reason
 
     def get_edge_feasible(self, from_waypoint: Waypoint, to_waypoint: Waypoint) -> dict:
         class FeasibilityResult:
             def __init__(self, value: bool, reason: str = ""):
                 self.value = value
                 self.reason = reason
-        if self._block_reason.get(frozenset([from_waypoint, to_waypoint]), "None") != "None":
+        edge = Edge(wps={from_waypoint, to_waypoint})
+        if self.block_reason.get(edge, "None") != "None":
             return FeasibilityResult(
                 value = True,
-                reason = self._block_reason[frozenset([from_waypoint, to_waypoint])],
+                reason = self.block_reason[edge],
             )
         return FeasibilityResult(value = False)
 
@@ -114,7 +141,7 @@ class Quest:
             if key >= len(self.waypoints) or key < -1:
                 raise ValueError(f"节点索引 {key} 超出{self}的范围 [0, {len(self.waypoints) - 1}]")
             if key == -1:
-                return self.target
+                return self.next
             return self.waypoints[key]
         if isinstance(key, str):
             for waypoint in self.waypoints:
@@ -132,12 +159,12 @@ class Quest:
             self.origin.ind = 0
             self.origin.quest = self
 
-        if not self.waypoints or self.waypoints[-1] != self.target:
-            self.waypoints.append(self.target)
-            self.target.ind = len(self.waypoints) - 1
-            self.target.quest = self
+        if not self.waypoints or self.waypoints[-1] != self.next:
+            self.waypoints.append(self.next)
+            self.next.ind = len(self.waypoints) - 1
+            self.next.quest = self
             
-        if waypoint == self.target:
+        if waypoint == self.next:
             return
         
         if waypoint == self.origin:
@@ -148,14 +175,14 @@ class Quest:
         waypoint.quest = self
 
         self.waypoints.insert(-1,waypoint)
-        self.target.ind = len(self.waypoints) - 1
+        self.next.ind = len(self.waypoints) - 1
         
     
     def all_paths(self, origin = None, target = None, return_ind = False , is_ind_from_zero = True):
         if not origin:
             origin = self.origin
         if not target:
-            target = self.target
+            target = self.next
         if origin == target:
             return [[origin]]
         paths = []
@@ -184,14 +211,14 @@ class Quest:
                 continue
             visited.add(waypoint)
             if not waypoint.next:
-                if self.target != waypoint:
+                if self.next != waypoint:
                     raise ValueError("存在多个叶子节点")
 
                 continue
             self.waypoints_append(waypoint)
             for _waypoint in waypoint.next:
                 queue.append(_waypoint)
-        self.waypoints_append(self.target)
+        self.waypoints_append(self.next)
         return self.waypoints
         
     def init(self):
@@ -204,7 +231,7 @@ class Quest:
                 else:
                     flag = _validate(next_waypoint) or flag
             if not waypoint.next:
-                flag = (waypoint == self.target) or flag
+                flag = (waypoint == self.next) or flag
             is_valid[waypoint] = flag
             if not flag:
                 waypoint.prune()  # 如果这个节点不可达终点，则从图中移除
@@ -229,7 +256,7 @@ class Quest:
             if ref >= len(self.waypoints) or ref < -1:
                 return None
             if ref == -1:
-                return self.target
+                return self.next
             return self.waypoints[ref]
         
         if isinstance(ref, str):
@@ -258,7 +285,7 @@ class Quest:
     def slice(self, origin: Waypoint | int | str, target: Waypoint | int | str = None) -> 'Quest':
         origin = self.get_waypoint(origin)
         if target is None:
-            target = self.target
+            target = self.next
         else:
             target = self.get_waypoint(target)
         

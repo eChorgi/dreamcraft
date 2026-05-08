@@ -2,7 +2,7 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass
 import inspect
-from typing import Any, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 @dataclass
 class Message:
@@ -60,14 +60,24 @@ class Mailbox:
     def __init__(self):
         self._queue = asyncio.Queue()
         self._buffer = deque()  # 内部暂存区，用于存放取出来但还不打算处理的信件
+        self._waiters: Dict[str, List[asyncio.Future]] = {} # 主题 -> 等待该主题的 Future 列表
 
     async def send(self, message: Message):
-        """发送消息（异步）"""
+        """发送消息：加入了精准拦截逻辑"""
+        topic = message.topic
+        
+        if topic in self._waiters and self._waiters[topic]:
+            future = self._waiters[topic].pop(0)
+
+            if not future.done():
+                future.set_result(message)
+                return
+
         await self._queue.put(message)
 
-    def try_fetch_topic(self, target_topic: str) -> Optional[Message]:
+    def fetch_topic(self, target_topic: str) -> Optional[Message]:
         """
-        【核心功能】非阻塞尝试获取指定主题的信件。
+        非阻塞尝试获取指定主题的信件。
         不会阻塞主循环，也不会丢失或打乱其他信件的顺序。
         """
         # 1. 把 _queue 里所有新到的信全部拿出来，追加到 _buffer 中
@@ -86,6 +96,26 @@ class Mailbox:
 
         # 4. 遍历完了也没找到指定主题的信件
         return None
+    
+    async def wait_for_topic(self, target_topic: str) -> Message:
+        """
+        【阻塞版】安全等待特定主题
+        """
+        # 第一步：先找找看，现在信箱或者暂存区里有没有现成的？
+        msg = self.fetch_topic(target_topic)
+        if msg:
+            return msg
+
+        # 第二步：目前没有。我们需要发个“悬赏令”然后开始休眠等待。
+        loop = asyncio.get_running_loop()
+        future = loop.create_future() # 创建一个凭证
+
+        # 把自己的凭证加入对应主题的悬赏名单
+        self._waiters.setdefault(target_topic, []).append(future)
+
+        # 第三步：阻塞在这里，交出 CPU。
+        # 直到 send() 方法发现目标主题，并调用 future.set_result(message) 唤醒我们。
+        return await future
 
     async def receive(self) -> Message:
         """

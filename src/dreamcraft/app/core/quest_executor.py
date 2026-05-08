@@ -5,7 +5,8 @@ from dreamcraft.domain.quest import Quest
 
 class ExecutorState(StrEnum):
     INIT = auto()       # 初始化规划
-    WAIT_FOR_ORCHESTRATOR = auto()  # 等待执行
+    FETCH_EXECUTING = auto()  # 获取执行任务
+    GENERATE_CODE = auto()  # 生成代码
     SUCCESS = auto()    # 任务成功
 
 
@@ -19,15 +20,27 @@ class QuestExecutor:
         current_state = ExecutorState.INIT
         max_steps = 10000
 
-        while current_state != ExecutorState.SUCCESS and self.context.step_count < max_steps:
+        while current_state != ExecutorState.SUCCESS and self.quest.step_count < max_steps:
             handler_method_name = f"handle_{current_state.lower()}"
             handler = getattr(self, handler_method_name, self.handle_unknown)
 
-            print(f"执行器状态 {self.context.step_count}: {current_state}")
-            current_state = await handler(self.context)
-            self.context.step_count += 1
-        if self.context.step_count >= max_steps:
+            print(f"执行器状态 {self.quest.step_count}: {current_state}")
+            current_state = await handler(self.quest)
+            self.quest.step_count += 1
+        if self.quest.step_count >= max_steps:
             print("执行器因超时或死循环被系统强制终止。")
 
+    async def handle_init(self) -> ExecutorState:
+        return ExecutorState.FETCH_EXECUTING
+    
+    async def handle_fetch_executing(self) -> ExecutorState:
+        msg = self.inbox.fetch_topic(f"execute")
+        if msg:
+            if len(self.quest.exec_path) > self.quest.exec_ind + 1:
+                return ExecutorState.GENERATE_CODE
+
+
+    async def handle_generate_code(self) -> ExecutorState:
+        
     
         
