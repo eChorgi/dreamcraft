@@ -1,13 +1,11 @@
 
+import re
+import esprima
 from string import Template
 from typing import ClassVar
-import re
-
-import esprima
 from pydantic import BaseModel, ConfigDict
 
-from dreamcraft.domain.observation import Snapshot
-from dreamcraft.domain.waypoint import Waypoint
+from dreamcraft.domain import Snapshot, Waypoint
 
 class BaseTask(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)

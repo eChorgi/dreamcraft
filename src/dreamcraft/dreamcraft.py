@@ -1,23 +1,26 @@
-from dreamcraft.app.core.message import MessageBus
-from dreamcraft.app.core.quest_executor import QuestExecutor
-from dreamcraft.app.core.quest_orchestrator import QuestOrchestrator
-from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, ISkillRepo, IToolRepo, IWikiRepo
-from dreamcraft.app.services.llm_service import LLMService
-from dreamcraft.app.services.llm_service_mock import LLMServiceMock
-from dreamcraft.container import GlobalContainer
-from dreamcraft.infra.env.azure_instance import AzureInstance
-from dreamcraft.infra.repo.skill_repo import SkillRepo
-from dreamcraft.config import settings
-from dreamcraft.app.services.quest_service import QuestService
-from dreamcraft.app.services.knowledge_service import KnowledgeService
-from dreamcraft.infra.env.minecraft_client import MinecraftClient
-from dreamcraft.infra.llm.openai_llm import LLMClient
-from dreamcraft.infra.repo.quest_repo import QuestRepo
-from dreamcraft.infra.repo.prompt_repo import PromptRepo
-from dreamcraft.infra.repo.wiki_repo import WikiRepo
-from dreamcraft.interface.tool_repo import ToolRepo
+import asyncio
 
-def bootstrap(azure_login=False):
+from dreamcraft.app import MessageBus, QuestOrchestrator, QuestExecutor, ILLMClient, IPromptRepo, IQuestRepo, ISkillRepo, IToolRepo, IWikiRepo, LLMService, QuestService, KnowledgeService
+from dreamcraft.infra import MinecraftClient, AzureInstance, QuestRepo, PromptRepo, WikiRepo, SkillRepo, LLMClient, ToolRepo
+from dreamcraft.container import GlobalContainer
+from dreamcraft.config import settings
+
+# from dreamcraft.app.services.llm_service_mock import LLMServiceMock
+
+class DreamCraft:
+    def __init__(
+        self
+    ):
+        """
+        DreamCraft 主类，负责整体协调和管理。
+        """
+        self.container = bootstrap()
+    
+    async def start(self, azure_login=False):
+        self.container = await bootstrap(azure_login=azure_login)
+        await self.container.infra.mc.start()
+        
+async def bootstrap(azure_login=False):
     #类型提示
     class InfraContainer(GlobalContainer):
         llm: ILLMClient
@@ -47,11 +50,11 @@ def bootstrap(azure_login=False):
     message_bus = MessageBus()
 
     # 初始化基础设施组件
-    i_llm = LLMClient(settings)
     i_wiki = WikiRepo(settings)
+    i_skill = SkillRepo(settings)
+    i_llm = LLMClient(settings)
     i_quest = QuestRepo(settings)
     i_prompt = PromptRepo(settings)
-    i_skill = SkillRepo(settings)
     i_azure = None
     if azure_login:
         i_azure = AzureInstance(settings = settings)
@@ -68,8 +71,8 @@ def bootstrap(azure_login=False):
     s_llm = LLMService(llm=i_llm, prompt=i_prompt, tool=i_tools, quest=i_quest)
 
     # 初始化 Orchestrator
-    s_orchestrator = QuestOrchestrator(s_quest=s_quest, llm=s_llm, prompt=i_prompt, bus=message_bus)
-    s_executor = QuestExecutor(bus=message_bus, quest=s_quest, llm=s_llm, knowledge=s_knowledge, mc_client=i_mc)
+    s_orchestrator = QuestOrchestrator(quest=s_quest, llm=s_llm, prompt=i_prompt, bus=message_bus)
+    s_executor = QuestExecutor(bus=message_bus, context=s_quest, llm=s_llm, knowledge=s_knowledge, mc=i_mc)
 
     container.register("infra", infra)
     container.register("service", service)
@@ -87,23 +90,10 @@ def bootstrap(azure_login=False):
     service.register("orchestrator", s_orchestrator)
     service.register("executor", s_executor)
 
+
+    await asyncio.gather(
+        i_wiki.load(),
+        i_skill.load()
+    )
+
     return container
-
-class DreamCraft:
-    def __init__(
-        self,
-        azure_login: bool = False,
-    ):
-        """
-        DreamCraft 主类，负责整体协调和管理。
-        """
-        self.container = bootstrap(azure_login=azure_login)
-        self.mc_client = self.container.infra.mc
-
-    def learn(self, reset_env=True):
-        self.mc_client.reset(
-            options={
-                "mode": "hard"
-            }
-        )
-        self.last_events = self.mc_client.step("")

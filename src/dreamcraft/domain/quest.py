@@ -1,18 +1,7 @@
-from collections import defaultdict, deque
-from dataclasses import dataclass
+from collections import deque
+
 from dreamcraft.domain.observation import Snapshot
-from dreamcraft.domain.waypoint import Waypoint
-
-@dataclass
-class Executable:
-    waypoint: Waypoint
-    reason: str = ""
-
-@dataclass
-class Edge:
-    wps: set[Waypoint]
-    def __hash__(self):
-        return hash(frozenset(self.wps))
+from dreamcraft.domain.waypoint import Edge, Waypoint
 
 class Quest:
     def __init__(self, origin: Waypoint, target: Waypoint):
@@ -24,11 +13,11 @@ class Quest:
         self.current = origin
         self.snapshot = Snapshot.default()
 
-        self.exec_path: list[Executable] = []
+        self.exec_path: list[Waypoint] = []
         self.exec_ind: int | None = None
         self.step_count = 0
-        self.block_reason = dict[Edge, str]()
-        self.error_history = defaultdict(list)
+        self.blocked_edges = dict[Edge, str]()
+        self.exec_history = {} # 格式 {"fail_records": [], "last_code": None}
 
         self.token_usage = 0
         self.history_log = []
@@ -38,13 +27,19 @@ class Quest:
     @property
     def executing(self) -> Waypoint | None:
         if self.exec_ind is not None and 0 <= self.exec_ind < len(self.exec_path):
-            return self.exec_path[self.exec_ind].waypoint
+            return self.exec_path[self.exec_ind]
+        return None
+    
+    @property
+    def exec_next(self) -> Waypoint | None:
+        if self.exec_ind is not None and 0 <= self.exec_ind < len(self.exec_path)-1:
+            return self.exec_path[self.exec_ind+1]
         return None
     
     @property
     def completed(self) -> list[Waypoint]:
         if self.exec_ind is not None and 0 <= self.exec_ind < len(self.exec_path):
-            return [executable.waypoint for executable in self.exec_path[:self.exec_ind]]
+            return self.exec_path[:self.exec_ind]
         return []
 
     @staticmethod
@@ -103,10 +98,10 @@ class Quest:
     
     def set_edge_feasible(self, from_waypoint: Waypoint, to_waypoint: Waypoint,value: bool, reason: str = ""):
         edge = Edge(wps={from_waypoint, to_waypoint})
-        if value == False and self.block_reason.get(edge, "None") != "None":
-            del self.block_reason[edge]
+        if value == False and self.blocked_edges.get(edge, "None") != "None":
+            del self.blocked_edges[edge]
         elif value == True:
-            self.block_reason[edge] = reason
+            self.blocked_edges[edge] = reason
 
     def get_edge_feasible(self, from_waypoint: Waypoint, to_waypoint: Waypoint) -> dict:
         class FeasibilityResult:
@@ -114,10 +109,10 @@ class Quest:
                 self.value = value
                 self.reason = reason
         edge = Edge(wps={from_waypoint, to_waypoint})
-        if self.block_reason.get(edge, "None") != "None":
+        if self.blocked_edges.get(edge, "None") != "None":
             return FeasibilityResult(
                 value = True,
-                reason = self.block_reason[edge],
+                reason = self.blocked_edges[edge],
             )
         return FeasibilityResult(value = False)
 

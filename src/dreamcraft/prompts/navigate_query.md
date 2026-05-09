@@ -1,3 +1,6 @@
+## 阻塞原因
+{reason}
+
 ## 当前状态
 {snapshot}
 

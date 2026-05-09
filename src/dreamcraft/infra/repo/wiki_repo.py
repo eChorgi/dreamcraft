@@ -1,15 +1,23 @@
 import json
 import faiss
+import asyncio
 
-from dreamcraft.domain.wiki import WikiDocument
-from dreamcraft.infra.utils import grep
+from dreamcraft.domain import WikiDocument
+from dreamcraft.utils import grep
 
 
 class WikiRepo:
     def __init__(self, settings):
-        self.documents:list[WikiDocument] = self.load_documents_from_json(settings.wiki_documents_path)
-        self.faiss_index = self.load_faiss_index(settings.wiki_faiss_index_path)
         self.md_path = settings.wiki_md_path
+        self.documents_path = settings.wiki_documents_path
+        self.faiss_index_path = settings.wiki_faiss_index_path
+        self.documents: list[WikiDocument] = []
+        self.faiss_index: faiss.Index = None
+        
+    async def load(self):
+        doc_task = asyncio.to_thread(self.load_documents_from_json, self.documents_path)
+        faiss_task = asyncio.to_thread(self.load_faiss_index, self.faiss_index_path)
+        self.documents, self.faiss_index = await asyncio.gather(doc_task, faiss_task)
 
     def __getitem__(self, key):
         if isinstance(key, int):

@@ -1,16 +1,13 @@
+import numpy as np
 from pathlib import Path
 from typing import Protocol
 from langchain_core.tools import tool
-import numpy as np
-from dreamcraft.domain.quest import Quest
-from dreamcraft.domain.waypoint import Waypoint
-
 from langchain_core.runnables import Runnable
-from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
+from langchain_core.language_models import LanguageModelInput
 
-from dreamcraft.domain.skill import LoadJSResult, LoadJSResults, Skill
-from dreamcraft.domain.observation import Snapshot
+from dreamcraft.domain import Quest, Waypoint, Skill, Observation
+from dreamcraft.app.models import LoadJSResult, LoadJSResults
 
 class IQuestRepo(Protocol):
     def add(self, quest: Quest):
@@ -65,4 +62,12 @@ class IToolRepo(Protocol):
     def all_tools(self) -> dict[str, tool]:
         ...
     def get_tools(self, tools: list[str]) -> list[tool]:
+        ...
+
+class IMinecraftClient(Protocol):
+    async def execute(self, code: str) -> Observation:
+        ...
+    async def start(self, options: dict = {}) -> Observation:
+        ...
+    async def observe(self) -> Observation:
         ...

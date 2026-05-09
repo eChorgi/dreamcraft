@@ -1,10 +1,14 @@
-import json
 import os
-from pathlib import Path
 import re
+import json
 import faiss
+import asyncio
 import numpy as np
-from dreamcraft.domain.skill import LoadJSResult, LoadJSResults, Skill
+from pathlib import Path
+
+from dreamcraft.domain import Skill
+from dreamcraft.app.models import LoadJSResult, LoadJSResults
+
 
 class SkillRepo:
     def __init__(self, settings):
@@ -12,17 +16,19 @@ class SkillRepo:
         self.json_path = settings.skill_documents_path
         self.npy_path = settings.skill_embeddings_path
         self.faiss_index_path = settings.skill_faiss_index_path
-        
+        self.skills:list[Skill] = []
         self.private_skills:list[Skill] = []
+        self.skills_dict = {}
+        self.embeddings: np.ndarray = None
+        self.faiss_index: faiss.Index = None
 
-        self.skills: list[Skill] = self.load_skills_from_json(self.json_path)
-        try:
-            self.embeddings: np.ndarray = np.load(self.npy_path) 
-        except:
-            self.embeddings: np.ndarray = None
+    async def load(self):
+        json_task = asyncio.to_thread(self.load_skills_from_json, self.json_path)
+        embeddings_task = asyncio.to_thread(lambda: np.load(self.npy_path) if self.npy_path.exists() else None)
+        faiss_task = asyncio.to_thread(self.load_faiss_index, self.faiss_index_path)
+        self.skills, self.embeddings, self.faiss_index = await asyncio.gather(json_task, embeddings_task, faiss_task)
         self.skills_dict = {skill.identifier: skill for skill in self.skills}
-        self.faiss_index = self.load_faiss_index(self.faiss_index_path)
-        
+
     def __getitem__(self, key: str | int) -> Skill:
         if isinstance(key, int):
             return self.skills[key]
@@ -217,3 +223,4 @@ class SkillRepo:
             return self.skills_dict.get(ref)
         else:
             raise KeyError("Reference must be either int (index) or str (skill name)")
+        

@@ -1,11 +1,10 @@
-from pathlib import Path
-import json
 import re
-
-import minecraft_launcher_lib
 import sys
-from dreamcraft.config import LOG_DIR, CACHE_DIR
-from .subprocess_runner import SubprocessRunner
+import json
+from pathlib import Path
+import minecraft_launcher_lib
+
+from dreamcraft.utils import SubprocessRunner
 
 
 class AzureInstance:
@@ -38,6 +37,7 @@ class AzureInstance:
         self.redirect_url = settings.azure_redirect_url
         self.secret_value = settings.azure_secret_value
         self.version = settings.azure_minecraft_version
+        self.cache_dir = settings.cache_dir
 
         # Minecraft 默认安装目录（由 minecraft_launcher_lib 判定平台路径）。
         self.mc_dir = minecraft_launcher_lib.utils.get_minecraft_directory()
@@ -51,7 +51,7 @@ class AzureInstance:
             commands=self.mc_command,
             name="minecraft",
             ready_match=r"Started serving on (\d+)",
-            log_path=LOG_DIR,
+            log_path=settings.log_dir / "minecraft",
             callback_match=r"\[Server thread/INFO\]: bot left the game",
         )
 
@@ -69,7 +69,7 @@ class AzureInstance:
         file_path = Path(__file__).resolve().parent
 
         # 首次运行：没有登录缓存时，触发 OAuth 登录并写入配置。
-        if not (CACHE_DIR/'credentials.json').exists():
+        if not (self.cache_dir / 'credentials.json').exists():
             (
                 login_url,
                 state,
@@ -112,23 +112,23 @@ class AzureInstance:
                 "token": login_data["access_token"],
             }
             # 持久化到本地，后续复用避免每次都手动登录。
-            if not CACHE_DIR.exists():
-                CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            (CACHE_DIR/'credentials.json').write_text(json.dumps(options), encoding="utf-8")
-            print(f"登录成功, token缓存至 {CACHE_DIR / 'credentials.json'}")
+            if not self.cache_dir.exists():
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+            (self.cache_dir/'credentials.json').write_text(json.dumps(options), encoding="utf-8")
+            print(f"登录成功, token缓存至 {self.cache_dir / 'credentials.json'}")
 
         # 读取缓存配置，拼装最终可执行命令。
-        options = json.loads((CACHE_DIR/'credentials.json').read_text(encoding="utf-8"))
+        options = json.loads((self.cache_dir/'credentials.json').read_text(encoding="utf-8"))
         mc_command = minecraft_launcher_lib.command.get_minecraft_command(
             self.version, self.mc_dir, options
         )
 
         return mc_command
 
-    def run(self):
+    async def run(self):
         """启动 Minecraft 进程并解析监听端口。"""
         # run() 会阻塞到 ready_match 命中（或启动失败被释放）。
-        self.mc_process.run()
+        await self.mc_process.run()
         pattern = r"Started serving on (\d+)"
 
         # ready_line 来自 SubprocessMonitor 捕获的“就绪日志行”。
@@ -140,9 +140,9 @@ class AzureInstance:
             # 启动成功但无法提取端口时，直接抛错给上层处理。
             raise RuntimeError("Minecraft 启动成功但未能捕获监听端口，请检查日志确认启动状态。")
 
-    def stop(self):
+    async def stop(self):
         """停止 Minecraft 进程。"""
-        self.mc_process.stop()
+        await self.mc_process.stop()
 
     @property
     def is_running(self):

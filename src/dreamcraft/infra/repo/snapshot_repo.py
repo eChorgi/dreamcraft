@@ -1,12 +1,12 @@
-import json
 import os
-
+import json
 import faiss
 import numpy as np
-from dreamcraft.domain.observation import Snapshot
+
+from dreamcraft.domain import Snapshot
 
 
-class snapshotRepo:
+class SnapshotRepo:
     def __init__(self, settings):
         self.dim = settings.embedding_dimension
         self.json_path = settings.snapshot_documents_path

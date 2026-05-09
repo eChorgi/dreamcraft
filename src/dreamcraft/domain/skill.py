@@ -1,6 +1,4 @@
-from dataclasses import dataclass
 import json
-
 
 class Skill:
     def __init__(self, name: str, description: str = None, impact: str = None, dependencies: list["Skill"] = None, function: str = None, provider: str = None):
@@ -93,13 +91,3 @@ class Skill:
         if self.provider:
             _dict["provider"] = self.provider
         return _dict
-
-@dataclass
-class LoadJSResults:
-    skills: set[Skill]
-    private_skills: set[Skill]
-
-@dataclass
-class LoadJSResult:
-    skill: Skill
-    is_private: bool

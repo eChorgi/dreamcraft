@@ -1,8 +1,5 @@
-
-from dreamcraft.domain.quest import Quest
-from dreamcraft.domain.waypoint import Waypoint
 from dreamcraft.app.protocols import IQuestRepo
-from dreamcraft.domain.observation import Snapshot
+from dreamcraft.domain.quest import Quest, Waypoint, Snapshot
 
 class QuestService:
     def __init__(self, quests : IQuestRepo = None):

@@ -1,8 +1,6 @@
 import json
 from typing import Literal
 
-
-
 class WikiDocument:
     def __init__(self, heading_hierarchy: list[str] = None, file: str = None, content: str = None, type: Literal["text", "table", None] = None, chunk_index: int = None):
         self.heading_hierarchy = heading_hierarchy

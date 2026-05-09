@@ -1,20 +1,19 @@
-from dreamcraft.domain.quest import Quest
-from dreamcraft.domain.waypoint import Waypoint
 import pickle
+
+from dreamcraft.domain import Quest, Waypoint
 
 
 class QuestRepo:
-    """路径仓库，负责管理和存储所有的路径数据。
+    """任务仓库，负责管理和存储所有的任务数据。
 
     主要职责：
-    1) 提供接口创建、查询、更新路径；
-    2) 维护路径数据结构（如 Quest）；
-    3) 处理路径的持久化（如保存到文件或数据库）；
-    4) 提供路径相关的工具方法（如路径验证、格式转换等）。
+    1) 提供接口创建、查询、更新任务；
+    2) 维护任务数据结构（如 Quest）；
+    3) 处理任务的持久化（如保存到文件或数据库）；
+    4) 提供执行路径相关的工具方法（如路径验证、格式转换等）。
 
     说明：
-    - 该类是路径管理的核心组件，其他模块通过它来访问和操作路径数据。
-    - 可以根据需要扩展更多功能，如路径版本控制、路径比较等。
+    - 该类是任务管理的核心组件，其他模块通过它来访问和操作任务数据。
     """
 
     def __init__(self, settings):

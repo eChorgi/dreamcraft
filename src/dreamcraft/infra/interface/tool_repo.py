@@ -1,15 +1,13 @@
 import json
-
+import inspect
+from pydantic import Field
+from functools import wraps
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, create_model
-from dreamcraft.app.services.knowledge_service import KnowledgeService
 
-import inspect
-from functools import wraps
-from pydantic import Field
-
-from dreamcraft.app.services.quest_service import QuestService
+from dreamcraft.app import QuestService, KnowledgeService
 from dreamcraft.infra.env.minecraft_client import MinecraftClient
+
 
 def need_thought(func):
     # 1. 获取原有的签名和注解

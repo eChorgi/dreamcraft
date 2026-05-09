@@ -1,11 +1,12 @@
 import os
+import numpy as np
 
+from openai import OpenAI
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import Runnable
-from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
-import numpy as np
-from openai import OpenAI
+from langchain_core.language_models import LanguageModelInput
+
 
 class LLMClient:
     """LLM 综合客户端，负责与大模型 API 的所有基础通信"""
@@ -14,13 +15,13 @@ class LLMClient:
         os.environ.pop("http_proxy", None)
         os.environ.pop("https_proxy", None)
         os.environ.pop("all_proxy", None)
+        self.dim = settings.embedding_dimension
         self.chat_client = ChatOpenAI(
             api_key=settings.chat_api_key,
             model=settings.chat_model_name,
             temperature=settings.temperature,
-            timeout=settings.request_timeout, 
+            timeout=settings.llm_request_timeout, 
         )
-        self.dim = settings.embedding_dimension
         self.embedding_client = OpenAI(api_key=settings.embedding_api_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
     def embed(self, text: str) -> np.ndarray:

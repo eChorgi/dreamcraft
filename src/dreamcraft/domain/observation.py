@@ -1,7 +1,6 @@
-from typing import Dict, List
 import json
-
-from pydantic import BaseModel, ValidationError
+from typing import Dict, List
+from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 
 class Vec3(BaseModel):

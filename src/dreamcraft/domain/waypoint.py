@@ -1,9 +1,18 @@
 from typing import TYPE_CHECKING, Union
-from dreamcraft.domain.observation import Snapshot
 
+from dreamcraft.domain.observation import Snapshot
 if TYPE_CHECKING:
     from dreamcraft.domain.quest import Quest  # 只有在静态检查时才导入
     
+class Edge:
+    def __init__(self, wps: list['Waypoint']):
+        if len(wps) != 2:
+            raise ValueError("Edge 必须连接两个 Waypoint")
+        self.wps = frozenset(wps)
+    wps: frozenset['Waypoint']
+    def __hash__(self):
+        return hash(self.wps)
+
 class Waypoint:
     def __init__(self, name, next:list['Waypoint'] = None, description = None, imaginated_snapshot: Snapshot = None, actual_snapshot: Snapshot = None):
         # 基础属性
@@ -16,6 +25,7 @@ class Waypoint:
         #   节点想象与实际状态
         self.imaginated_snapshot = imaginated_snapshot
         self.actual_snapshot = actual_snapshot
+        self.extra_info = {}
 
                
         # 内部属性
