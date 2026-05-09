@@ -20,7 +20,7 @@ class SkillRepo:
             self.embeddings: np.ndarray = np.load(self.npy_path) 
         except:
             self.embeddings: np.ndarray = None
-        self.skills_dict = {skill.name: skill for skill in self.skills}
+        self.skills_dict = {skill.identifier: skill for skill in self.skills}
         self.faiss_index = self.load_faiss_index(self.faiss_index_path)
         
     def __getitem__(self, key: str | int) -> Skill:
@@ -74,7 +74,7 @@ class SkillRepo:
             
         description = ''.join(description_lines).strip()
         function = body
-        provider = js_path.parent
+        provider = js_path.parent.name
         return LoadJSResult(skill=Skill(name=name, description=description, function=function, provider=provider), is_private=is_private)
 
 
@@ -112,8 +112,25 @@ class SkillRepo:
                 continue
 
             if search_skill.name.split('(')[0].split('function')[-1] in skill.function:
-                skill.dependencies.add(search_skill)
+                skill.dependencies.add(search_skill.identifier)
     
+
+    def resolve_dependencies(self, skill: Skill, layers: list[Skill] = None):
+        dep = set()
+        if not layers:
+            layers = [skill]
+        for identifier in skill.dependencies:
+            _skill = self.skills_dict.get(identifier)
+            if _skill is None:
+                print(f"警告: 技能 {skill.name} 的依赖项 {identifier} 在技能库中未找到，可能是因为未正确加载或解析")
+                continue
+            dep.add(_skill)
+            if _skill in layers:
+                continue
+            new_deps = self.resolve_dependencies(_skill, layers + [_skill])
+            dep.update(new_deps)
+        return dep
+
     def update_all_dependencies(self):
         for skill in self.skills + self.private_skills:
             self.update_dependencies(skill)
@@ -131,7 +148,8 @@ class SkillRepo:
                 skills = json.load(f)
             lst = [Skill(**doc) for doc in skills]
             for x in lst:
-                x.provider = json_path.stem
+                if not x.provider:
+                    x.provider = json_path.stem
             return list(dict.fromkeys(lst))  # 去重，保持顺序
         except json.JSONDecodeError:
             print(f"错误: {json_path} 格式非法")

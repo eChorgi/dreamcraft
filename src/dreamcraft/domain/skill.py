@@ -12,21 +12,26 @@ class Skill:
         self.provider = provider
     
     def __repr__(self):
-        return json.dumps(self.json, ensure_ascii=False)
+        return json.dumps(self.dict, ensure_ascii=False)
     
     def __str__(self):
-        return json.dumps(self.json, ensure_ascii=False)
+        return json.dumps(self.dict, ensure_ascii=False)
 
     def __eq__(self, value):
         if not isinstance(value, Skill):
             return False
-        return self.name == value.name and self.provider == value.provider
+        return self.identifier == value.identifier
 
     def __hash__(self):
-        return hash((self.name, self.provider))
+        return hash(self.identifier)
+    
+    @property
+    #唯一标识
+    def identifier(self):
+        return f"{self.provider}::{self.name}" if self.provider else self.name
 
     @property
-    def json(self):
+    def brief_dict(self):
         _dict = {
             "name": self.name,
             "description": self.description.replace('"',"`")
@@ -74,25 +79,20 @@ class Skill:
     def dict(self):
         if self.dependencies and isinstance(list(self.dependencies)[0], str):
             print(f"警告: 技能 {self.name} 的依赖项似乎未正确解析，依赖项列表包含字符串而非 Skill 对象")
-        return {
+        _dict = {
             "name": self.name,
-            "description": self.description,
-            "impact": self.impact,
-            "function": self.function,
-            "dependencies": [d.name for d in self.dependencies]
         }
-    
-    def resolve_dependencies(self, layers: list["Skill"] = None):
-        dep = set()
-        if not layers:
-            layers = [self]
-        for skill in self.dependencies:
-            dep.add(skill)
-            if skill in layers:
-                continue
-            new_deps = skill.resolve_dependencies(layers + [skill])
-            dep.update(new_deps)
-        return dep
+        if self.description:
+            _dict["description"] = self.description
+        if self.impact:
+            _dict["impact"] = self.impact
+        if self.function:
+            _dict["function"] = self.function
+        if self.dependencies:
+            _dict["dependencies"] = [d.identifier for d in self.dependencies]
+        if self.provider:
+            _dict["provider"] = self.provider
+        return _dict
 
 @dataclass
 class LoadJSResults:

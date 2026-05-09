@@ -12,14 +12,14 @@ class WikiDocument:
         self.chunk_index = chunk_index
 
     def __repr__(self):
-        return json.dumps(self.json, ensure_ascii=False)
+        return json.dumps(self.dict, ensure_ascii=False)
     
     def __str__(self):
-        return json.dumps(self.json, ensure_ascii=False)
+        return json.dumps(self.dict, ensure_ascii=False)
     
 
     @property
-    def json(self):
+    def dict(self):
         try:
             json_dict = {
                 "heading_hierarchy": self.heading_hierarchy,

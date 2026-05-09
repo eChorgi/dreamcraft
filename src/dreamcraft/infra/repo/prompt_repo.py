@@ -1,7 +1,4 @@
-from dreamcraft.domain.waypoint import Waypoint
-from dreamcraft.domain.observation import Snapshot
-
-class BasePromptCon
+from dreamcraft.app.models.tasks import BaseTask
 
 class PromptRepo:
     def __init__(self, settings):
@@ -37,79 +34,17 @@ class PromptRepo:
             formatted_prompt = prompt + f"\n\n# 本次任务查询\n{query}"
         return formatted_prompt
 
-    def imaginate(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
-        """专门用于生成想象状态的 prompt 模板"""
-        prompt = self.react(
-            role = self.load("imaginate_role"),
-            query = self.load("imaginate_query").format(
-                completed = "- " + "\n- ".join([wp.line if isinstance(wp, Waypoint) else wp for wp in completed]),
-                target=target.line if isinstance(target, Waypoint) else target,
-                snapshot = snapshot.json
-            ),
-            enable_context_compression=enable_context_compression
+    def get_task_prompt(self, task: BaseTask) -> str:
+        """接收一个 Task 对象，自动完成模板加载和数据注入"""
+        # 1. 加载角色设定
+        role_text = self.load(task.role_template)
+        # 2. 加载查询模板，并用 Task 里的数据填充它
+        query_template = self.load(task.query_template)
+        query_text = query_template.format(**task.get_prompt_kwargs())
+        
+        # 3. 组装最终的 React 模板
+        return self.react(
+            role=role_text,
+            query=query_text,
+            enable_context_compression=task.enable_context_compression
         )
-        return prompt
-
-    def feasibility_check(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
-        """专门用于生成可行性检查的 prompt 模板"""
-        prompt = self.react(
-            role = self.load("feasibility_check_role"),
-            query = self.load("feasibility_check_query").format(
-                completed = "- " + "\n- ".join([wp.line if isinstance(wp, Waypoint) else wp for wp in completed]),
-                target=target.line if isinstance(target, Waypoint) else target,
-                snapshot = snapshot.json
-            ),
-            enable_context_compression=enable_context_compression
-        )
-        return prompt
-    
-    def expand_path(self, completed: list[Waypoint | str], target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
-        """专门用于生成路径扩展的 prompt 模板"""
-        prompt = self.react(
-            role = self.load("expand_path_role"),
-            query = self.load("expand_path_query").format(
-                completed = "- " + "\n- ".join([wp.line if isinstance(wp, Waypoint) else wp for wp in completed]),
-                target = target.line if isinstance(target, Waypoint) else target,
-                snapshot = snapshot.json
-            ),
-            enable_context_compression=enable_context_compression
-        )
-        return prompt
-    
-    def navigate(self, target: Waypoint, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
-        """专门用于生成路径导航的 prompt 模板"""
-        prompt = self.react(
-            role = self.load("navigate_role"),
-            query = self.load("navigate_query").format(
-                target = target.details if isinstance(target, Waypoint) else target,
-                snapshot = snapshot.json
-            ),
-            enable_context_compression=enable_context_compression
-        )
-        return prompt
-    
-    def granularity_check(self, target: Waypoint | str, snapshot: Snapshot, enable_context_compression: bool = True) -> str:
-        """专门用于生成粒度检查的 prompt 模板"""
-        prompt = self.react(
-            role = self.load("granularity_check_role"),
-            query = self.load("granularity_check_query").format(
-                target = target.details if isinstance(target, Waypoint) else target,
-                snapshot = snapshot.json
-            ),
-            enable_context_compression=enable_context_compression
-        )
-        return prompt
-    
-    def generate_code(self, target: Waypoint | str, snapshot: Snapshot, reason: str, error: str = "无", enable_context_compression: bool = True) -> str:
-        """专门用于生成代码的 prompt 模板"""
-        prompt = self.react(
-            role = self.load("generate_code_role"),
-            query = self.load("generate_code_query").format(
-                error = error,
-                target = target.details if isinstance(target, Waypoint) else target,
-                snapshot = snapshot.json,
-                reason = reason
-            ),
-            enable_context_compression=enable_context_compression
-        )
-        return prompt

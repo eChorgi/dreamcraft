@@ -8,6 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CACHE_DIR = BASE_DIR / ".cache"
 LOG_DIR = BASE_DIR / "logs"
 PROMPT_DIR = BASE_DIR / "src" / "dreamcraft" / "prompts"
+MINEFLAYER_DIR = BASE_DIR / "src" / "mineflayer_server"
 DATA_DIR = BASE_DIR / "data"
 WIKI_DIR = DATA_DIR / "wiki"
 SKILL_DIR = DATA_DIR / "skill"
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
     mineflayer_port: int = 3000
     mc_port: Optional[int] = 33333
     mineflayer_request_timeout: int = 600
+    mineflayer_path: Path = MINEFLAYER_DIR / "index.js"
     wiki_documents_path: Path = WIKI_DIR / "wiki_documents.json"
     wiki_md_path: Path = WIKI_DIR / "md"
     wiki_faiss_index_path: Path = WIKI_DIR / "wiki_faiss.index"

@@ -140,7 +140,7 @@ class Quest:
             if key >= len(self.waypoints) or key < -1:
                 raise ValueError(f"节点索引 {key} 超出{self}的范围 [0, {len(self.waypoints) - 1}]")
             if key == -1:
-                return self.next
+                return self.target
             return self.waypoints[key]
         if isinstance(key, str):
             for waypoint in self.waypoints:
@@ -158,12 +158,12 @@ class Quest:
             self.origin.ind = 0
             self.origin.quest = self
 
-        if not self.waypoints or self.waypoints[-1] != self.next:
-            self.waypoints.append(self.next)
-            self.next.ind = len(self.waypoints) - 1
-            self.next.quest = self
+        if not self.waypoints or self.waypoints[-1] != self.target:
+            self.waypoints.append(self.target)
+            self.target.ind = len(self.waypoints) - 1
+            self.target.quest = self
             
-        if waypoint == self.next:
+        if waypoint == self.target:
             return
         
         if waypoint == self.origin:
@@ -174,14 +174,14 @@ class Quest:
         waypoint.quest = self
 
         self.waypoints.insert(-1,waypoint)
-        self.next.ind = len(self.waypoints) - 1
+        self.target.ind = len(self.waypoints) - 1
         
     
     def all_paths(self, origin = None, target = None, return_ind = False , is_ind_from_zero = True):
         if not origin:
             origin = self.origin
         if not target:
-            target = self.next
+            target = self.target
         if origin == target:
             return [[origin]]
         paths = []
@@ -210,14 +210,14 @@ class Quest:
                 continue
             visited.add(waypoint)
             if not waypoint.next:
-                if self.next != waypoint:
+                if self.target != waypoint:
                     raise ValueError("存在多个叶子节点")
 
                 continue
             self.waypoints_append(waypoint)
             for _waypoint in waypoint.next:
                 queue.append(_waypoint)
-        self.waypoints_append(self.next)
+        self.waypoints_append(self.target)
         return self.waypoints
         
     def init(self):
@@ -230,7 +230,7 @@ class Quest:
                 else:
                     flag = _validate(next_waypoint) or flag
             if not waypoint.next:
-                flag = (waypoint == self.next) or flag
+                flag = (waypoint == self.target) or flag
             is_valid[waypoint] = flag
             if not flag:
                 waypoint.prune()  # 如果这个节点不可达终点，则从图中移除
@@ -255,7 +255,7 @@ class Quest:
             if ref >= len(self.waypoints) or ref < -1:
                 return None
             if ref == -1:
-                return self.next
+                return self.target
             return self.waypoints[ref]
         
         if isinstance(ref, str):
@@ -274,7 +274,7 @@ class Quest:
         return adj_list
     
     @property
-    def json(self):
+    def dict(self):
         return {
             "waypoint_num": len(self.waypoints),
             "waypoints": [waypoint.line for waypoint in self.waypoints],
@@ -284,7 +284,7 @@ class Quest:
     def slice(self, origin: Waypoint | int | str, target: Waypoint | int | str = None) -> 'Quest':
         origin = self.get_waypoint(origin)
         if target is None:
-            target = self.next
+            target = self.target
         else:
             target = self.get_waypoint(target)
         

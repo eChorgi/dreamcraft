@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 from langchain.tools import tool
 
@@ -45,12 +47,12 @@ class KnowledgeService:
     def load_js_skills(self):
         all_s = self.skill.load_js_dir_skills(self.skill_js_dir)
         self.skill.update_private_skills(all_s.private_skills)
-        for skill in all_s.skills:
-            if skill not in self.skill.skills:
-                self.add_skill(skill)
+        for _skill in all_s.skills:
+            if _skill not in self.skill.skills:
+                self.add_skill(_skill)
             else:
-                skill.skills_dict[skill.name] = skill
-                print(f"更新技能 {skill.name} 的信息，但不更新向量和索引")
+                self.skill.skills_dict[_skill.name] = _skill
+                print(f"更新技能 {_skill.name} 的信息，但不更新向量和索引")
         self.skill.update_all_dependencies()
 
         
@@ -59,7 +61,9 @@ class KnowledgeService:
         for skill in self.skill.skills:
             if skill.name.split('(')[0].split('function')[-1] in code:
                 dep.add(skill)
-                dep.update(skill.resolve_dependencies())
+                dep.update(self.skill.resolve_dependencies(skill))
         for s in dep:
-            code += f"\n\n{s.function}"
+            if s.function:
+                code += f"\n\n{s.function}"
+        code =re.sub(r'\n+', '\n', code)
         return code

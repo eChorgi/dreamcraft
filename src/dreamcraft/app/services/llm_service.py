@@ -2,13 +2,11 @@ import asyncio
 from string import Template
 import esprima
 from typing import List, Union
+from dreamcraft.app.models.tasks import BaseTask
 from dreamcraft.utils.print_helper import ipynb_print
 from dreamcraft.app.protocols import ILLMClient, IPromptRepo, IQuestRepo, IToolRepo
 from langchain.tools import tool
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
-
-from dreamcraft.domain.waypoint import Waypoint
-from dreamcraft.domain.observation import Snapshot
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 
 class LLMService:
     """负责与 LLM 进行交互的服务类，提供一个统一的接口供 Orchestrator 调用"""
@@ -192,241 +190,27 @@ class LLMService:
             }
         }
     
+    async def execute(self, task: BaseTask) -> dict:
+        """唯一的统一执行入口"""
+        
+        # 1. 组装 Tools (直接从 task 对象上读静态配置！)
+        tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"]
+        tools.extend(task.extra_tools)
+        if task.enable_context_compression:
+            tools.append("summary")
 
+        prompt_text = self.prompt.get_task_prompt(task)
 
-    async def check_feasibility(
-        self, 
-        completed: list[Waypoint | str], 
-        target: Waypoint | str, 
-        snapshot: Snapshot, 
-        max_iterations: int = 10, 
-        max_retries: int = 5, 
-        enable_context_compression: bool = True
-        ) -> dict:
-        def parse_bool(text):
-            result = None
-            if "True" in text: result = True
-            if "False" in text: result = False
-            return {
-                "result": result,
-                "reason": None if result is not None else f"请直接明确回复 'True' 或 'False'，不要输出其他内容。"
-            }
-
+        # 3. 执行并解析
         response = await self.react(
-            prompt = self.prompt.feasibility_check(
-                completed = completed,
-                target = target,
-                snapshot = snapshot,
-                enable_context_compression=enable_context_compression
-            ),
-            parser = parse_bool,
-            tools = ["query_wiki", "query_skill", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
-            max_iterations = max_iterations,
-            max_retries = max_retries,
+            prompt=prompt_text,
+            parser=task.parser,  # 直接读取任务自带的解析器！
+            tools=tools,
+            max_iterations=task.max_iterations,
+            max_retries=task.max_retries,
         )
-        return response
-
-    async def imaginate(
-        self, 
-        completed: list[Waypoint | str], 
-        target: Waypoint | str, 
-        snapshot: Snapshot, 
-        max_iterations: int = 10, 
-        max_retries: int = 5, 
-        enable_context_compression: bool = True
-    ) -> dict:
-        def snapshot_parser(text) -> dict:
-            result = Snapshot.parse(text)
-            return {
-                "result": result,
-                "reason": None if result else f"请严格按照 JSON 格式输出完整信息。**参考格式**:\n{Snapshot.schema}"
-            }
-        response = await self.react(
-            prompt = self.prompt.imaginate(
-                completed = completed,
-                target = target,
-                snapshot = snapshot,
-                enable_context_compression=enable_context_compression
-            ),
-            parser=snapshot_parser,
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
-            max_iterations = max_iterations,
-            max_retries= max_retries,
-        )
-        return response
-    
-    async def chat(
-        self, 
-        query: str, 
-        max_iterations: int = 10, 
-        max_retries: int = 5, 
-        enable_context_compression: bool = True
-    ) -> dict:
-        response = await self.react(
-            prompt = self.prompt.react(
-                role="你是一个 Minecraft 游戏聊天助手，负责与玩家进行对话，提供游戏内的帮助和建议。",
-                query = query,
-                enable_context_compression=enable_context_compression
-            ),
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
-            max_iterations = max_iterations,
-            max_retries= max_retries,
-            enable_context_compression=enable_context_compression
-        )
-        return response
-
-    async def expand_path(
-        self,
-        completed: list[Waypoint | str], 
-        target: Waypoint | str, 
-        snapshot: Snapshot, 
-        max_iterations: int = 10, 
-        max_retries: int = 5, 
-        enable_context_compression: bool = True
-    ) -> dict:
-        def path_parser(text) -> dict:
-            text_lines = text.strip().split("\n")
-            waypoints = []
-            for line in text_lines:
-                if not line.strip():
-                    continue
-                if ":" not in line:
-                    waypoints.append(Waypoint(name=line.strip()))
-                    continue
-                name, action = line.split(":", 1)
-                name = name.replace("\\n", "").strip()
-                action = action.replace("\\n", "").strip()
-                waypoints.append(Waypoint(name=name, description=action))
-            return {
-                "result": waypoints,
-                "reason": None if waypoints else "请严格按照每行一个[步骤名称]:[动作指令]的格式输出一个子目标列表！"
-            }    
-        response = await self.react(
-            prompt = self.prompt.expand_path(
-                completed = completed,
-                snapshot = snapshot,
-                target = target.line if isinstance(target, Waypoint) else target,
-                enable_context_compression=enable_context_compression
-            ),
-            parser=path_parser,
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
-            max_iterations = max_iterations,
-            max_retries= max_retries,
-        )
-        if response["result"][-1].line == (target.line if isinstance(target, Waypoint) else target):
-            response["result"] = response["result"][:-1]
-        return response
-    
-    async def navigate(
-        self,
-        target: Waypoint, 
-        snapshot: Snapshot, 
-        max_iterations: int = 10, 
-        max_retries: int = 5, 
-        enable_context_compression: bool = True
-    ) -> dict:
-        def navigate_parser(ind: int) -> Waypoint | None:
-            if ind is None:
-                result = None
-            if isinstance(ind, str):
-                try:
-                    ind = ind.strip()
-                    if not ind.isdigit():
-                        return None
-                    ind = int(ind)
-                    result = self.quest.get_waypoint(ind)
-                except Exception as e:
-                    reason = e.__str__()
-            return {
-                "result": result,
-                "reason": None if result else f"遇到错误{reason}，请直接输出下一个要执行的步骤的数字索引，不要输出其他内容。"
-            }
-        response = await self.react(
-            prompt = self.prompt.navigate(
-                snapshot = snapshot,
-                target = target.details if isinstance(target, Waypoint) else target,
-                enable_context_compression=enable_context_compression
-            ),
-            parser=navigate_parser,
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section", "get_next_waypoints"] + (["summary"] if enable_context_compression else []),
-            max_iterations = max_iterations,
-            max_retries= max_retries,
-        )
-        return response
-    
-    async def check_granularity(
-        self, 
-        target: Waypoint | str, 
-        snapshot: Snapshot, 
-        max_iterations: int = 10, 
-        max_retries: int = 5, 
-        enable_context_compression: bool = True
-        ) -> dict:
-        def parse_bool(text):
-            result = None
-            if "True" in text: result = True
-            if "False" in text: result = False
-            return {
-                "result": result,
-                "reason": None if result is not None else f"请直接明确回复 'True' 或 'False'，不要输出其他内容。"
-            }
-
-        response = await self.react(
-            prompt = self.prompt.granularity_check(
-                target = target,
-                snapshot = snapshot,
-                enable_context_compression=enable_context_compression
-            ),
-            parser = parse_bool,
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"] + (["summary"] if enable_context_compression else []),
-            max_iterations = max_iterations,
-            max_retries = max_retries,
-        )
-        return response
-    
-    async def generate_code(
-        self, 
-        target: Waypoint | str, 
-        snapshot: Snapshot, 
-        reason: str,
-        error: str = None,
-        max_iterations: int = 10, 
-        max_retries: int = 5, 
-        enable_context_compression: bool = True
-        ) -> bool:
-        def parse_js(text):
-            result = None
-            reason = None
-            if text.startswith("```js") and text.endswith("```"):
-                text = text[5:-3].strip()
-            elif text.startswith("```") and text.endswith("```"):
-                text = text[3:-3].strip()
-            elif text.startswith("```javascript") and text.endswith("```"):
-                text = text[11:-3].strip()
-
-            js_template = Template("(async () => { $code_body })();")
-            final_js = js_template.substitute(code_body=text)
-            try:
-                parsed = esprima.parseScript(final_js)
-                result = text
-            except Exception as e:
-                reason = f"生成的代码无法通过语法检查，错误信息: {str(e)}"
-            return {
-                "result": result,
-                "reason": reason
-            }
-
-        response = await self.react(
-            prompt = self.prompt.generate_code(
-                target = target,
-                snapshot = snapshot,
-                reason = reason,
-                error = error,
-                enable_context_compression=enable_context_compression
-            ),
-            parser = parse_js,
-            tools = ["query_wiki", "grep_wiki_files", "read_wiki_section", "query_skill"] + (["summary"] if enable_context_compression else []),
-            max_iterations = max_iterations,
-            max_retries = max_retries,
-        )
+        
+        # 4. 后处理拦截...
+        # ... (省略) ...
+                
         return response

@@ -35,19 +35,16 @@ class Waypoint:
         return f"Waypoint(name={self.name})"
 
     def __str__(self):
-        if self.description:
-            return f"Waypoint(name={self.name}, description={self.description})"
-        return f"Waypoint(name={self.name})"
+        return self.line
     
     @property
     def line(self):
-        string = f"{self.name}"
         if self.description:
-            string += f" : {self.description}"
-        return string
+            return f"{self.name}: {self.description}"
+        return self.name
     
     @property
-    def details(self):
+    def dict(self):
         _dict = {
             "ind": self.ind,
             "name": self.name,

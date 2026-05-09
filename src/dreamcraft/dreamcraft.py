@@ -17,7 +17,8 @@ from dreamcraft.infra.repo.prompt_repo import PromptRepo
 from dreamcraft.infra.repo.wiki_repo import WikiRepo
 from dreamcraft.interface.tool_repo import ToolRepo
 
-def bootstrap():
+def bootstrap(azure_login=False):
+    #类型提示
     class InfraContainer(GlobalContainer):
         llm: ILLMClient
         wiki: IWikiRepo
@@ -25,13 +26,15 @@ def bootstrap():
         prompt: IPromptRepo
         skill: ISkillRepo
         tool: IToolRepo
+        mc: MinecraftClient
+        azure: AzureInstance
     
     class ServiceContainer(GlobalContainer):
         knowledge: KnowledgeService
         quest: QuestService
         llm: LLMService
         orchestrator: QuestOrchestrator
-
+        executor: QuestExecutor
 
     class AppContainer(GlobalContainer):
         infra: InfraContainer
@@ -49,6 +52,10 @@ def bootstrap():
     i_quest = QuestRepo(settings)
     i_prompt = PromptRepo(settings)
     i_skill = SkillRepo(settings)
+    i_azure = None
+    if azure_login:
+        i_azure = AzureInstance(settings = settings)
+    i_mc = MinecraftClient(settings, azure_instance=i_azure)
 
     # 初始化服务层组件
     s_knowledge = KnowledgeService(settings, wiki=i_wiki, llm=i_llm, skill=i_skill)
@@ -62,7 +69,7 @@ def bootstrap():
 
     # 初始化 Orchestrator
     s_orchestrator = QuestOrchestrator(s_quest=s_quest, llm=s_llm, prompt=i_prompt, bus=message_bus)
-    s_executor = QuestExecutor(bus=message_bus, quest=s_quest, llm=s_llm, knowledge=s_knowledge)
+    s_executor = QuestExecutor(bus=message_bus, quest=s_quest, llm=s_llm, knowledge=s_knowledge, mc_client=i_mc)
 
     container.register("infra", infra)
     container.register("service", service)
@@ -72,6 +79,8 @@ def bootstrap():
     infra.register("prompt", i_prompt)
     infra.register("skill", i_skill)
     infra.register("tool", i_tools)
+    infra.register("azure", i_azure)
+    infra.register("mc", i_mc)
     service.register("knowledge", s_knowledge)
     service.register("quest", s_quest)
     service.register("llm", s_llm)
@@ -83,18 +92,13 @@ def bootstrap():
 class DreamCraft:
     def __init__(
         self,
-        mc_port: int = None,
         azure_login: bool = False,
     ):
         """
         DreamCraft 主类，负责整体协调和管理。
         """
-        
-        self.container = bootstrap()
-        azure_instance = None
-        if azure_login:
-            azure_instance = AzureInstance(settings = settings)
-        self.mc_client = MinecraftClient(settings, mc_port=mc_port, azure_instance=azure_instance)
+        self.container = bootstrap(azure_login=azure_login)
+        self.mc_client = self.container.infra.mc
 
     def learn(self, reset_env=True):
         self.mc_client.reset(

@@ -11,7 +11,6 @@ class MinecraftClient():
         settings,
         azure_instance: AzureInstance = None,
     ):
-        
         self.azure_instance = azure_instance
         self.mc_port = azure_instance.mc_port if azure_instance else settings.mc_port
         self.mineflayer_server = f"{settings.mineflayer_host}:{settings.mineflayer_port}"

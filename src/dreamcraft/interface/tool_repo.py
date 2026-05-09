@@ -9,6 +9,7 @@ from functools import wraps
 from pydantic import Field
 
 from dreamcraft.app.services.quest_service import QuestService
+from dreamcraft.infra.env.minecraft_client import MinecraftClient
 
 def need_thought(func):
     # 1. 获取原有的签名和注解
@@ -66,9 +67,10 @@ class ThoughtToolArgs(BaseModel):
         )
 
 class ToolRepo:
-    def __init__(self, knowledges: KnowledgeService, quest: QuestService):
+    def __init__(self, knowledges: KnowledgeService, quest: QuestService, mc: MinecraftClient = None):
         self.knowledges = knowledges
         self.quest = quest
+        self.mc = mc
         self._all_tools = None  # 用于缓存工具实例的字典
 
     def __getitem__(self, key: str) -> tool:
@@ -119,7 +121,7 @@ class ToolRepo:
             str_list = []
             for r in result:
                 l2_dist = r['l2_distance']
-                str_list.append(f"{{\n'document': {r['document'].json},\n'l2_distance': {l2_dist:.2f}\n}}")
+                str_list.append(f"{{\n'document': {r['document'].dict},\n'l2_distance': {l2_dist:.2f}\n}}")
             return "[\n"+",\n".join(str_list)+"\n]"
 
         @tool("query_skill",
@@ -148,7 +150,7 @@ class ToolRepo:
             str_list = []
             for r in result:
                 l2_dist = r['l2_distance']
-                str_list.append(f'{{\n"skill": {json.dumps(r["skill"].json)},\n"l2_distance": {l2_dist:.2f}\n}}')
+                str_list.append(f'{{\n"skill": {json.dumps(r["skill"].brief_dict)},\n"l2_distance": {l2_dist:.2f}\n}}')
             return "[\n"+",\n".join(str_list)+"\n]"
 
         # @tool("expand_path") # 简单参数也可以不写 Schema 类
@@ -232,23 +234,20 @@ class ToolRepo:
                 for next_wp in waypoint.next:
                     _get_next(next_wp, current_depth + 1)
             _get_next(self.quest.get_waypoint(ind))
-            # def _get_next(ind, depth, current_depth=0) -> dict:
-            #     if current_depth >= depth:
-            #         return [x.details for x in self.quest.get_waypoint(ind).next]
-            #     waypoints = self.quest.get_waypoint(ind).next
-            #     result = []
-            #     for wp in waypoints:
-            #         d = wp.details
-            #         if len(wp.next) > 0 and current_depth + 1 < depth:
-            #             d["next"] = _get_next(wp.ind, depth, current_depth + 1)
-            #         result.append(d)
-            #     return result
-            # return _get_next(ind, depth)
-            result = [self.quest.get_waypoint(i).details for i in st]
+            result = [self.quest.get_waypoint(i).dict for i in st]
             for r in result:
                 r["next"] = [n.ind for n in self.quest.get_waypoint(r["ind"]).next]
             return result
-
+        
+        @tool("observe",
+            description=
+"""
+# 功能：获取当前Minecraft世界的完整状态观察，包含玩家状态、周围环境、背包物品等信息。   
+""",
+        )
+        @need_thought
+        def observe():
+            return self.mc.observe()
     
         self._all_tools = {
             "query_wiki": query_wiki,
@@ -257,6 +256,7 @@ class ToolRepo:
             "summary": summary,
             "grep_wiki_files": grep_wiki_files,
             "read_wiki_section": read_wiki_section,
-            "get_next_waypoints": get_next_waypoints
+            "get_next_waypoints": get_next_waypoints,
+            "observe": observe
         }
         return self._all_tools

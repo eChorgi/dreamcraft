@@ -52,7 +52,7 @@ class Observation(BaseModel):
             health=self.status.health,
             saturation=self.status.saturation,
             food=self.status.food,
-            entities=self.status.entities,
+            entities_distance=self.status.entities,
             voxels=self.voxels,
             extra_info=""
         )
@@ -67,18 +67,16 @@ class Snapshot(BaseModel):
     health: int
     saturation: int
     food: int
-    entities: Dict[str, float]
-    extra_info: Optional[str] = None
+    entities_distance: Dict[str, float]
+    extra_info: Optional[str] = ""
+
+    def __str__(self):
+        return self.model_dump_json(ensure_ascii=False)
     
     @property
     def dict(self):
         return self.model_dump()
     
-    @property
-    def json(self):
-        return self.model_dump_json(ensure_ascii=False)
-    
-    @property
     @staticmethod
     def schema() -> str:
         return json.dumps({
@@ -98,22 +96,12 @@ class Snapshot(BaseModel):
                 "health": {"type": "integer"},
                 "saturation": {"type": "integer"},
                 "food": {"type": "integer"},
-                "entities": {"type": "object", "additionalProperties": {"type": "number"}},
+                "entities_distance": {"type": "object", "additionalProperties": {"type": "number"}},
                 "voxels": {"type": "array", "items": {"type": "string"}},
                 "extra_info": {"type": "string"}
             },
         }, ensure_ascii=False)
 
-    @staticmethod
-    def parse(json_str: str) -> 'Snapshot':
-        try:
-            snapshot = Snapshot.model_validate_json(json_str)
-            print("✅ JSON 完全符合格式，解析成功！")
-        except ValidationError as e:
-            print("❌ JSON 不符合格式，解析失败！")
-            print(e.errors()) 
-        return snapshot
-    
     @staticmethod
     def default():
         return Snapshot(
@@ -125,7 +113,7 @@ class Snapshot(BaseModel):
             health=20,
             saturation=20,
             food=20,
-            entities={},
+            entities_distance={},
             voxels=[],
             extra_info=""
         )
