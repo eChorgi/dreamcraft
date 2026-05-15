@@ -1,7 +1,7 @@
 from .azure_instance import AzureInstance
-from .minecraft_client import MinecraftClient
+from .agent import Agent
 
 __all__ = [
-    "MinecraftClient",
+    "Agent",
     "AzureInstance"
 ]

@@ -1,3 +1,6 @@
+from dreamcraft.app import QuestOrchestrator, QuestExecutor, ILLMClient, IPromptRepo, IQuestRepo, ISkillRepo, IToolRepo, IWikiRepo, LLMService, QuestService, KnowledgeService
+from dreamcraft.infra import Agent, AzureInstance
+
 class GlobalContainer:
     def __init__(self):
         self._contents = {}
@@ -20,19 +23,24 @@ class GlobalContainer:
         except KeyError:
             raise AttributeError(f"'{name}' not found in container")
 
-# class AppContainer:
-#     """应用容器，负责管理应用中的各种服务和组件"""
-#     def __init__(self,
-#             mc_port: int = settings.mc_port,
-#             azure_login: Dict[str, str] = settings.azure_login,
-#             mineflayer_port: int = settings.mineflayer_port,
-#             env_request_timeout: int = settings.mineflayer_request_timeout         
-#         ):
-#         self.path_manager = PathManager()
-#         self.mineflayer = MineflayerClient(
-#             mc_port=mc_port,
-#             azure_login=azure_login,
-#             server_port=mineflayer_port,
-#             request_timeout=env_request_timeout,
-#         )
-#         self.llm = OpenaiLLMClient()
+
+class InfraContainer(GlobalContainer):
+    llm: ILLMClient
+    wiki: IWikiRepo
+    path: IQuestRepo
+    prompt: IPromptRepo
+    skill: ISkillRepo
+    tool: IToolRepo
+    mc: Agent
+    azure: AzureInstance
+
+class ServiceContainer(GlobalContainer):
+    knowledge: KnowledgeService
+    quest: QuestService
+    llm: LLMService
+    orchestrator: QuestOrchestrator
+    executor: QuestExecutor
+
+class AppContainer(GlobalContainer):
+    infra: InfraContainer
+    service: ServiceContainer

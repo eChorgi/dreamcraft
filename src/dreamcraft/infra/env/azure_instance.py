@@ -125,7 +125,7 @@ class AzureInstance:
 
         return mc_command
 
-    async def run(self):
+    async def run(self) -> int:
         """启动 Minecraft 进程并解析监听端口。"""
         # run() 会阻塞到 ready_match 命中（或启动失败被释放）。
         await self.mc_process.run()
@@ -136,6 +136,7 @@ class AzureInstance:
         if match:
             self.mc_port = int(match.group(1))
             print("捕获到 Minecraft 服务器端口为: ", self.mc_port)
+            return self.mc_port
         else:
             # 启动成功但无法提取端口时，直接抛错给上层处理。
             raise RuntimeError("Minecraft 启动成功但未能捕获监听端口，请检查日志确认启动状态。")

@@ -9,6 +9,10 @@ class Edge:
         if len(wps) != 2:
             raise ValueError("Edge 必须连接两个 Waypoint")
         self.wps = frozenset(wps)
+        
+    def __init__(self, wp1: 'Waypoint', wp2: 'Waypoint'):
+        self.wps = frozenset([wp1, wp2])
+    
     wps: frozenset['Waypoint']
     def __hash__(self):
         return hash(self.wps)

@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     embedding_dimension: int = 1536
     temperature: float = 0.7
     llm_request_timeout: int = 30
+
     mc_port: Optional[int] = 33333
+    azure_login: bool = False
 
     mineflayer_host: str = "http://127.0.0.1"
     mineflayer_port: int = 3000

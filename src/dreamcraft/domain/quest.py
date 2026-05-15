@@ -9,12 +9,12 @@ class Quest:
         self.target = target
         self.waypoints = []
 
-        self.next = origin
         self.current = origin
+        self.next = target
         self.snapshot = Snapshot.default()
 
-        self.exec_path: list[Waypoint] = []
-        self.exec_ind: int | None = None
+        self.exec_path: list[Waypoint] = [self.origin]
+        self.exec_ind: int | None = 0
         self.step_count = 0
         self.blocked_edges = dict[Edge, str]()
         self.exec_history = {} # 格式 {"fail_records": [], "last_code": None}
@@ -32,7 +32,7 @@ class Quest:
     
     @property
     def exec_next(self) -> Waypoint | None:
-        if self.exec_ind is not None and 0 <= self.exec_ind < len(self.exec_path)-1:
+        if 0 <= self.exec_ind < len(self.exec_path)-1:
             return self.exec_path[self.exec_ind+1]
         return None
     

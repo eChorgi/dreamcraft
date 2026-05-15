@@ -1,62 +1,35 @@
 import inspect
 import asyncio
 from collections import deque
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union, overload
+from typing import Any, Dict, List, Literal, Optional, Type, TypeVar, Union, overload
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dreamcraft.domain import Waypoint
 
 class Message(BaseModel):
-    topic: str
-    content: Optional[Any] = None
-    sender: Optional[str] = None
-    
-M = TypeVar("M", bound=Message)
-
-class ExecutionFailureMessageContent(BaseModel):
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
-    from_wp: Optional[Waypoint]
-    to_wp: Optional[Waypoint]
-    reason: Dict[str, Any]  # 可以包含错误类型、错误信息、环境状态等详细信息
-
-class ExecutionFailureMessage(Message):
-    topic: str = "exec_fail"
-    content: ExecutionFailureMessageContent = Field(default_factory=ExecutionFailureMessageContent)
-
-    @model_validator(mode='before')
-    @classmethod
-    def wrap_content(cls, data: Any) -> Any:
-        # 如果用户直接传了 from_wp, to_wp 等，我们手动把它们包进 content 里
-        if isinstance(data, dict):
-            # 提取属于 content 的字段
-            content_data = {
-                "from_wp": data.pop("from_wp", None),
-                "to_wp": data.pop("to_wp", None),
-                "reason": data.pop("reason", {}),
-            }
-            # 如果真的传了这些字段，就构造 content
-            if any(content_data.values()):
-                data["content"] = content_data
-        return data
-
-    @overload
-    def __init__(self, *, from_wp: Waypoint, to_wp: Waypoint, reason: Dict[str, Any]): ...
-    @overload
-    def __init__(self, *, content: ExecutionFailureMessageContent): ...
-
-    def __init__(self, **data):
-        super().__init__(**data) 
-    
+    topic: str
+    sender: Optional[str] = None
     @property
-    def from_wp(self) -> Optional[Waypoint]:
-        return self.content.from_wp if self.content else None
-    @property
-    def to_wp(self) -> Optional[Waypoint]:
-        return self.content.to_wp if self.content else None
-    @property
-    def reason(self) -> Dict[str, Any]:
-        return self.content.reason if self.content else {}
-        
+    def payload(self) -> Dict[str, Any]:
+        return self.model_dump(exclude={'topic', 'sender'})
+
+
+M = TypeVar("M", bound=Message)
+class ExecutionFinishMessage(Message):
+    topic: str = "exec_finish"
+    status: Literal["success", "failure"]
+    from_wp: Waypoint
+    to_wp: Waypoint
+class ExecutionSuccessMessage(ExecutionFinishMessage):
+    topic: str = "exec_finish"
+    status: Literal["success"] = "success"
+class ExecutionFailureMessage(ExecutionFinishMessage):
+    topic: str = "exec_finish"
+    status: Literal["failure"] = "failure"
+    reason: Dict[str, Any]
+class ExecutableMessage(Message):
+    topic: str = "execute"
 
 class MessageBus:
     def __init__(self):
@@ -92,7 +65,7 @@ class MessageBus:
             self.subscribers.setdefault(topic, []).append(subscriber.post)
 
     async def publish(self, topic: str, data):
-        message = Message(topic=topic, content=data)
+        message = Message(topic=topic, payload=data)
         tasks = []
         # 1. 收集所有的 Mailbox 发送任务
         # 注意：这里直接调用 inbox.send，因为你在 subscribe 里存的是方法引用
@@ -205,6 +178,25 @@ class Mailbox:
         # 第三步：阻塞在这里，交出 CPU。
         # 直到 send() 方法发现目标主题，并调用 future.set_result(message) 唤醒我们。
         return await future
+
+    async def wait_for_topics(self, target_topics: List[str | type[Message]]) -> Message:
+        """
+        等待多个主题中的任意一个，返回最先到达的消息。
+        """
+        futures = []
+        for topic in target_topics:
+            if isinstance(topic, type) and issubclass(topic, Message):
+                topic = topic.model_fields['topic'].default
+            futures.append(self.wait_for_topic(topic))
+        
+        done, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED)
+        
+        # 取消其他未完成的等待
+        for future in pending:
+            future.cancel()
+        
+        # 返回第一个完成的结果
+        return done.pop().result()
 
     async def receive(self) -> Message:
         """

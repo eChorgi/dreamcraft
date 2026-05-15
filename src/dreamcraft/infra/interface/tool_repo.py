@@ -6,8 +6,8 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field, create_model
 
 from dreamcraft.app import QuestService, KnowledgeService
-from dreamcraft.infra.env.minecraft_client import MinecraftClient
-
+from dreamcraft.infra.env.agent import Agent
+ 
 
 def need_thought(func):
     # 1. 获取原有的签名和注解
@@ -65,7 +65,7 @@ class ThoughtToolArgs(BaseModel):
         )
 
 class ToolRepo:
-    def __init__(self, knowledges: KnowledgeService, quest: QuestService, mc: MinecraftClient = None):
+    def __init__(self, knowledges: KnowledgeService, quest: QuestService, mc: Agent = None):
         self.knowledges = knowledges
         self.quest = quest
         self.mc = mc

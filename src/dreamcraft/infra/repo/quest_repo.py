@@ -18,7 +18,7 @@ class QuestRepo:
 
     def __init__(self, settings):
         self.quests: list[Quest] = []
-        self.file_path = settings.path_pkl_path
+        self.file_path = settings.quest_pkl_path
     
     def load_path(self, file_path = None):
         """从外部数据加载路径，构造 Quest 对象。"""

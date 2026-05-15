@@ -1,10 +1,10 @@
-from .env import MinecraftClient, AzureInstance
+from .env import Agent, AzureInstance
 from .repo import QuestRepo, PromptRepo, WikiRepo, SkillRepo
 from .llm import LLMClient
 from .interface import ToolRepo
 
 __all__ = [
-    "MinecraftClient",
+    "Agent",
     "AzureInstance",
     "QuestRepo",
     "PromptRepo",
