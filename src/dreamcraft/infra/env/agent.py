@@ -3,7 +3,8 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, ConfigDict
 
 from dreamcraft.domain import Observation
-from dreamcraft.infra.env.mineflayer_interface import MineflayerServer
+from dreamcraft.infra.env.mineflayer_interface import MineflayerInterface
+from dreamcraft.app.services import KnowledgeService
 from dreamcraft.utils import SubprocessRunner
 
 class ResponseModel(BaseModel):
@@ -31,17 +32,18 @@ class Agent():
     def __init__(
         self,
         settings,
-        mineflayer_server: MineflayerServer
+        knowledge: KnowledgeService,
+        mineflayer: MineflayerInterface
     ):
         self.mc_port = settings.mc_port
         self.log_dir = settings.log_dir
-        self.mineflayer_port = settings.mineflayer_port
         self.request_timeout = settings.mineflayer_request_timeout
         self.mineflayer_address = f"{settings.mineflayer_host}:{settings.mineflayer_port}"
 
         # 是否已与后端建立会话连接。
         self.is_connected = False
-        self.mineflayer = mineflayer_server
+        self.mineflayer = mineflayer
+        self.knowledge = knowledge
 
     async def start_mineflayer(self, options) -> Observation: 
         await self.mineflayer.run()
@@ -92,12 +94,14 @@ class Agent():
                     f"调用 Minecraft 服务器失败, {str(e)}"
                 )
     
-    
     async def execute(
         self,
         code: str,
     ) -> dict:
         """执行代码：发送代码到后端，返回环境观测结果。"""
+        code = f"""
+            {self.knowledge.inject_dependencies(code)}
+        """
         data = {
             "code": code
         }
@@ -105,23 +109,35 @@ class Agent():
             status = 500
             error_text = None
             observation = None
+            outputs = []
             try:
                 res = await client.post(
                     f"{self.mineflayer_address}/execute", json=data, timeout=self.request_timeout
                 )
                 res.raise_for_status()
                 status = res.status_code
-                observation = Observation.model_validate_json(res.json())
+                json = res.json()
+                outputs = json.get("outputs", [])
+                chat_log = json.get("chat_log", [])
+                observation = Observation.model_validate_json(json.get("observation", {}))
             except httpx.RequestError as e:
                 # 统一处理：无论是网络超时、连接失败，还是 404/500 错误
                 status = getattr(e.response, "status_code", 500)
+                try:
+                    response_data = e.response.json()
+                    if isinstance(response_data, dict):
+                        chat_log = response_data.get("chat_log", [])
+                except Exception:
+                    chat_log = []
                 error_text = str(e)
                 if hasattr(e, "response") and e.response:
                     error_text = e.response.text
             return {
                 "observation": observation,
                 "status": status,
-                "error": error_text,
+                "message": error_text,
+                "outputs": outputs,
+                "chat_log": chat_log,
             }
     
     async def close(self):

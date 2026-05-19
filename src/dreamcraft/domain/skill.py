@@ -1,13 +1,14 @@
 import json
 
 class Skill:
-    def __init__(self, name: str, description: str = None, impact: str = None, dependencies: list["Skill"] = None, function: str = None, provider: str = None):
+    def __init__(self, name: str, description: str = None, impact: str = None, dependencies: list["Skill"] = None, function: str = None, provider: str = None, is_private: bool = False):
         self.name = name
         self.description = description
         self.impact = impact
         self.function = function
         self.dependencies:set[Skill] = dependencies if dependencies else set()
         self.provider = provider
+        self.is_private = is_private
     
     def __repr__(self):
         return json.dumps(self.dict, ensure_ascii=False)
@@ -38,16 +39,6 @@ class Skill:
             _dict["impact"] = self.impact.replace('"',"`")
         return _dict
     
-    @property
-    def all_json(self):
-        return {
-            "name": self.name,
-            "description": self.description,
-            "impact": self.impact,
-            "function": self.function,
-            "dependencies": [d.name for d in self.dependencies],
-        }
-
     @property
     def summary(self):
         if not self.impact:
@@ -86,8 +77,10 @@ class Skill:
             _dict["impact"] = self.impact
         if self.function:
             _dict["function"] = self.function
-        if self.dependencies:
-            _dict["dependencies"] = [d.identifier for d in self.dependencies]
+        # if self.dependencies:
+        #     _dict["dependencies"] = [d.identifier for d in self.dependencies]
         if self.provider:
             _dict["provider"] = self.provider
+        if self.is_private:
+            _dict["is_private"] = self.is_private
         return _dict

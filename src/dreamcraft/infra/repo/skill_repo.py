@@ -25,9 +25,22 @@ class SkillRepo:
     async def load(self):
         json_task = asyncio.to_thread(self.load_skills_from_json, self.json_path)
         embeddings_task = asyncio.to_thread(lambda: np.load(self.npy_path) if self.npy_path.exists() else None)
-        faiss_task = asyncio.to_thread(self.load_faiss_index, self.faiss_index_path)
-        self.skills, self.embeddings, self.faiss_index = await asyncio.gather(json_task, embeddings_task, faiss_task)
-        self.skills_dict = {skill.identifier: skill for skill in self.skills}
+
+        all_skills, self.embeddings = await asyncio.gather(json_task, embeddings_task)
+        self.skills = [skill for skill in all_skills if not skill.is_private]
+        self.private_skills = [skill for skill in all_skills if skill.is_private]
+        self.skills_dict = {skill.identifier: skill for skill in all_skills}
+        if not self.faiss_index_path.exists():
+            print(f"FAISS 索引文件 {self.faiss_index_path} 不存在，正在创建新的索引...")
+            faiss_index = faiss.IndexFlatL2(self.dim)
+            for i in range(len(self.skills)):
+                faiss_index.add(self.embeddings[i:i+1])
+            self.faiss_index = faiss_index
+        else:
+            self.faiss_index = self.load_faiss_index(self.faiss_index_path)
+        self.update_all_dependencies()
+        print(f"技能库加载完成，共 {len(self.skills)} 个技能，其中 {len(self.private_skills)} 个私有技能")
+
 
     def __getitem__(self, key: str | int) -> Skill:
         if isinstance(key, int):
@@ -37,10 +50,10 @@ class SkillRepo:
         else:
             raise KeyError("Key must be either int (index) or str (skill name)")
 
-    def load_js_skill(self, js_path: Path)-> LoadJSResult:
+    def load_js_skill(self, js_path: Path)-> Skill:
         with open(js_path, 'r', encoding='utf-8') as f:
             code_lines = f.readlines()
-        
+        code_lines = [line for line in code_lines if line.strip() != '']  # 去除空行
         is_comment = False
         description_lines = []
         name_line = ''
@@ -81,10 +94,10 @@ class SkillRepo:
         description = ''.join(description_lines).strip()
         function = body
         provider = js_path.parent.name
-        return LoadJSResult(skill=Skill(name=name, description=description, function=function, provider=provider), is_private=is_private)
+        return Skill(name=name, description=description, function=function, provider=provider, is_private=is_private)
 
 
-    def load_js_dir_skills(self, dir: Path) -> LoadJSResults:
+    def load_js_dir_skills(self, dir: Path) -> list[Skill]:
         #获取目录下所有子目录, pathlib实现
         subdirs = [entry for entry in dir.iterdir() if entry.is_dir()]
         #遍历每个子目录，获取其中的js文件
@@ -96,18 +109,12 @@ class SkillRepo:
                         js_files.append(Path(root) / file)
         
         skills = []
-        private_skills = []
         for js_file in js_files:
-            result = self.load_js_skill(js_file)
-            skill = result.skill
-            is_private = result.is_private
+            skill = self.load_js_skill(js_file)
             if skill is not None:
-                if is_private:
-                    private_skills.append(skill)
-                else:
-                    skills.append(skill)
+                skills.append(skill)
             
-        return LoadJSResults(skills=skills, private_skills=private_skills)
+        return skills
     
     def update_dependencies(self, skill: Skill):
         if not skill.function:
@@ -118,17 +125,17 @@ class SkillRepo:
                 continue
 
             if search_skill.name.split('(')[0].split('function')[-1] in skill.function:
-                skill.dependencies.add(search_skill.identifier)
+                skill.dependencies.add(search_skill)
     
 
     def resolve_dependencies(self, skill: Skill, layers: list[Skill] = None):
         dep = set()
         if not layers:
             layers = [skill]
-        for identifier in skill.dependencies:
-            _skill = self.skills_dict.get(identifier)
+        for dependency in skill.dependencies:
+            _skill = self.skills_dict.get(dependency.identifier)
             if _skill is None:
-                print(f"警告: 技能 {skill.name} 的依赖项 {identifier} 在技能库中未找到，可能是因为未正确加载或解析")
+                print(f"警告: 技能 {skill.name} 的依赖项 {dependency.identifier} 在技能库中未找到，可能是因为未正确加载或解析")
                 continue
             dep.add(_skill)
             if _skill in layers:
@@ -162,28 +169,33 @@ class SkillRepo:
             return []
     
     def add_private_skill(self, new_private_skill: Skill):
-        if new_private_skill in self.private_skills:
-            return
+        if new_private_skill.identifier in [skill.identifier for skill in self.private_skills]:
+            for i, skill in enumerate(self.private_skills):
+                if skill.identifier == new_private_skill.identifier:
+                    self.private_skills[i] = new_private_skill
+                    self.skills_dict[new_private_skill.identifier] = new_private_skill
+                    print(f"技能 {new_private_skill.name} 已存在，已更新其信息")
+                    break
         self.private_skills.append(new_private_skill)
+        self.save_skills_to_json(self.json_path)
         self.update_dependencies(new_private_skill)
+        return True
 
-    def update_private_skills(self, new_private_skills: list[Skill]):
+    def update_private_skills(self, new_private_skills: list[Skill]) -> int:
+        count = 0
         for skill in new_private_skills:
-            self.add_private_skill(skill)
+            if self.add_private_skill(skill):
+                count += 1
         self.private_skills = list(dict.fromkeys(self.private_skills))
+        return count
 
     def load_faiss_index(self, index_path):
-        if not index_path.exists():
-            faiss_index = faiss.IndexFlatL2(self.dim)
-            for i in range(len(self.skills)):
-                faiss_index.add(self.embeddings[i:i+1])
-            return faiss_index
         faiss_index = faiss.read_index(str(index_path))
         return faiss_index
     
     def save_skills_to_json(self, json_path):
         with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump([doc.dict for doc in self.skills], f, ensure_ascii=False, indent=4)
+            json.dump([doc.dict for doc in self.skills+self.private_skills], f, ensure_ascii=False, indent=4)
 
     def save_faiss_index(self, index_path):
         faiss.write_index(self.faiss_index, str(index_path))

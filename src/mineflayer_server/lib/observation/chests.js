@@ -1,4 +1,4 @@
-const { Observation } = require("./base");
+import { Observation } from "./base.js";
 
 class Chests extends Observation {
     constructor(bot) {
@@ -28,4 +28,4 @@ class Chests extends Observation {
     }
 }
 
-module.exports = Chests;
+export default Chests;

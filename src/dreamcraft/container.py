@@ -3,7 +3,7 @@ from dreamcraft.infra import Agent, AzureInstance
 
 class GlobalContainer:
     def __init__(self):
-        self._contents = {}
+        self.__dict__['_contents'] = {}
 
     def register(self, name, instance):
         self._contents[name] = instance
@@ -22,6 +22,12 @@ class GlobalContainer:
             return self.get(name)
         except KeyError:
             raise AttributeError(f"'{name}' not found in container")
+        
+    def __setattr__(self, name, value):
+        if name == '_contents':
+            self.__dict__[name] = value
+        else:
+            self.register(name, value)
 
 
 class InfraContainer(GlobalContainer):
@@ -31,7 +37,7 @@ class InfraContainer(GlobalContainer):
     prompt: IPromptRepo
     skill: ISkillRepo
     tool: IToolRepo
-    mc: Agent
+    agent: Agent
     azure: AzureInstance
 
 class ServiceContainer(GlobalContainer):

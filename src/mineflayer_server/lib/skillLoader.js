@@ -75,5 +75,6 @@ function inject(bot) {
     };
 }
 
-// export all control_primitives
-module.exports = { inject };
+export default {
+    inject: inject
+};

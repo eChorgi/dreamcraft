@@ -1,4 +1,4 @@
-const Observation = require("./base.js").Observation;
+import { Observation } from "./base.js";
 
 class onChat extends Observation {
     constructor(bot) {
@@ -23,4 +23,4 @@ class onChat extends Observation {
     }
 }
 
-module.exports = onChat;
+export default onChat;

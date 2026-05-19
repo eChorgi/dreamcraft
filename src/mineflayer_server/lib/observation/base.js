@@ -42,4 +42,7 @@ function inject(bot, obs_list) {
     };
 }
 
-module.exports = { Observation, inject };
+export {
+    Observation,
+    inject
+};

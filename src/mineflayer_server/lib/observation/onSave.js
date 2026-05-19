@@ -1,4 +1,4 @@
-const Observation = require("./base.js").Observation;
+import { Observation } from "./base.js";
 
 class onSave extends Observation {
     constructor(bot) {
@@ -19,4 +19,4 @@ class onSave extends Observation {
     }
 }
 
-module.exports = onSave;
+export default onSave;

@@ -1,10 +1,50 @@
-const fs = require("fs");
-const express = require("express");
-const bodyParser = require("body-parser");
-const mineflayer = require("mineflayer");
-const { obs, OnChat, OnError, Voxels, BlockRecords, Status, Inventory, OnSave, Chests } = require("./lib/observation");
-const skills = require("./lib/skillLoader");
+// import fs from "fs";
+import express from "express";
+import bodyParser from "body-parser";
+import mineflayer from "mineflayer";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+import { obs, OnChat, OnError, Voxels, BlockRecords, Status, Inventory, OnSave, Chests } from "./lib/observation/index.js";
+import skills from "./lib/skillLoader.js";
+import minecraftDataFactory from "minecraft-data";
+import pf from "mineflayer-pathfinder";
+// 兼容项：统一物品/方块别名，降低不同命名导致的执行失败。
+let mcData;
+// mcData.itemsByName["leather_cap"] = mcData.itemsByName["leather_helmet"];
+// mcData.itemsByName["leather_tunic"] = mcData.itemsByName["leather_chestplate"];
+// mcData.itemsByName["leather_pants"] = mcData.itemsByName["leather_leggings"];
+// mcData.itemsByName["lapis_lazuli_ore"] = mcData.itemsByName["lapis_ore"];
+// mcData.blocksByName["lapis_lazuli_ore"] = mcData.blocksByName["lapis_ore"];
 
+const {
+    Movements,
+    goals: {
+        Goal,
+        GoalBlock,
+        GoalNear,
+        GoalXZ,
+        GoalNearXZ,
+        GoalY,
+        GoalGetToBlock,
+        GoalLookAtBlock,
+        GoalBreakBlock,
+        GoalCompositeAny,
+        GoalCompositeAll,
+        GoalInvert,
+        GoalFollow,
+        GoalPlaceBlock,
+    },
+    pathfinder,
+    Move,
+    ComputedPath,
+    PartiallyComputedPath,
+    XZCoordinates,
+    XYZCoordinates,
+    SafeBlock,
+    GoalPlaceBlockOptions,
+} = pf;
+
+import { Vec3 } from "vec3";
 let bot = null;
 const app = express();
 // 放宽请求体大小限制，便于传输较长的 program/code 内容。
@@ -30,7 +70,9 @@ app.post("/start", (req, res) => {
     bot.once("error", onConnectionFailed);
     bot.on("kicked", onDisconnect);
     bot.on("physicsTick", onTick);
+    
     bot.once("spawn", async () => {
+        mcData = minecraftDataFactory(bot.version);
         bot.removeListener("error", onConnectionFailed);
         let itemTicks = 1;
         // hard reset：清空并重建物品/装备状态，确保实验可复现。
@@ -71,7 +113,7 @@ app.post("/start", (req, res) => {
         }
 
         // 动态加载常用插件：寻路、工具选择、采集方块、PVP。
-        const { pathfinder } = require("mineflayer-pathfinder");
+        const {pathfinder} = require("mineflayer-pathfinder")
         const tool = require("mineflayer-tool").plugin;
         const collectBlock = require("mineflayer-collectblock").plugin;
         const pvp = require("mineflayer-pvp").plugin;
@@ -103,10 +145,14 @@ app.post("/start", (req, res) => {
             await bot.waitForTicks(bot.waitTicks);
         }
 
+        bot.chat_log = [];
+        bot.on("chat", (username, message) => {
+            bot.chat_log.push(`${username}: ${message}`);
+        });
+
         // 等待所有开局指令稳定执行后，返回首次观测结果。
         await bot.waitForTicks(bot.waitTicks * itemTicks);
         res.json(bot.observe());
-        // res.json({ message: "Success!" });
         // 初始化 tick 计数器并设置常用游戏规则。
         // initCounter(bot);
         // bot.chat("/gamerule keepInventory true");
@@ -193,56 +239,21 @@ app.get("/observe", async (req, res) => {
 app.post("/execute", async (req, res) => {
     // 避免重复响应（异常分支与正常分支都可能尝试返回）。
     let response_sent = false;
-
+    bot.chat_log = [];
     // 兜底异常处理：捕获未处理异常并转为 bot error，再回传观测。
     function otherError(err) {
         console.log("捕获未处理异常:", err);
         bot.emit("error", handleError(err));
-        bot.waitForTicks(bot.waitTicks).then(() => {
-            if (!response_sent) {
-                response_sent = true;
-                res.json(bot.observe());
-            }
-        });
+        // bot.waitForTicks(bot.waitTicks).then(() => {
+        if (!response_sent) {
+            response_sent = true;
+            res.json(bot.observe());
+        }
+        // });
     }
 
     process.on("uncaughtException", otherError);
 
-    // 兼容项：统一物品/方块别名，降低不同命名导致的执行失败。
-    const mcData = require("minecraft-data")(bot.version);
-    // mcData.itemsByName["leather_cap"] = mcData.itemsByName["leather_helmet"];
-    // mcData.itemsByName["leather_tunic"] = mcData.itemsByName["leather_chestplate"];
-    // mcData.itemsByName["leather_pants"] = mcData.itemsByName["leather_leggings"];
-    // mcData.itemsByName["lapis_lazuli_ore"] = mcData.itemsByName["lapis_ore"];
-    // mcData.blocksByName["lapis_lazuli_ore"] = mcData.blocksByName["lapis_ore"];
-    const {
-        Movements,
-        goals: {
-            Goal,
-            GoalBlock,
-            GoalNear,
-            GoalXZ,
-            GoalNearXZ,
-            GoalY,
-            GoalGetToBlock,
-            GoalLookAtBlock,
-            GoalBreakBlock,
-            GoalCompositeAny,
-            GoalCompositeAll,
-            GoalInvert,
-            GoalFollow,
-            GoalPlaceBlock,
-        },
-        pathfinder,
-        Move,
-        ComputedPath,
-        PartiallyComputedPath,
-        XZCoordinates,
-        XYZCoordinates,
-        SafeBlock,
-        GoalPlaceBlockOptions,
-    } = require("mineflayer-pathfinder");
-    const { Vec3 } = require("vec3");
     // 每个 step 都重建 movement 配置，确保路径规划参数与当前状态一致。
     const movements = new Movements(bot, mcData);
     bot.pathfinder.setMovements(movements);
@@ -263,99 +274,81 @@ app.post("/execute", async (req, res) => {
     const code = req.body.code;
     // 累积观测用于调试/回放。
     bot.cumulativeObs = [];
-    await bot.waitForTicks(bot.waitTicks);
-    const r = await evaluateCode(code);
+    // await bot.waitForTicks(bot.waitTicks);
+    
     // 清理兜底异常监听，避免影响后续请求。
     process.off("uncaughtException", otherError);
-    if (r !== "success") {
-        bot.emit("error", handleError(r));
+    
+    try {
+        const r = await evaluateCode(code);
+        if (!response_sent) {
+            response_sent = true;
+            res.json({
+                "outputs": r.outputs,
+                "observation": bot.observe(),
+                "chat_log": bot.chat_log,
+            });
+        }
+    } catch (err) {
+        return res.status(500).json({
+            "status": "fatal_error",
+            "message": `${err.message}`,
+            "chat_log": bot.chat_log,
+            // "stack": err.stack // 调试用，生产环境可去掉
+        });
     }
+    // if (r.status !== "success") {
+    //     bot.emit("error", handleError(r));
+    // }
     // 尝试回收工作台/熔炉等临时资源，减少环境污染。
     // await returnItems();
     // 等待最后一批消息/状态同步后再返回观测。
-    await bot.waitForTicks(bot.waitTicks);
-    if (!response_sent) {
-        response_sent = true;
-        res.json(bot.observe());
-    }
+    // await bot.waitForTicks(bot.waitTicks);
+    
 
     async function evaluateCode(code) {
-        // 将 programs 与 code 拼接为一个 async IIFE 执行。
-        // 这里故意返回字符串/错误对象，交由上层统一处理。
+        const outputs = []; // 用于存储所有控制台输出
+        // 1. 备份原始的 console 方法
+        const original = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info
+        };
+
+        const originalChat = bot.chat;
+        bot.chat = (message) => {
+            bot.chat_log.push(`${message}`);
+            
+            // 🌟 核心修正：显式将 bot 作为上下文（this）传进去
+            originalChat.call(bot, message); 
+        };
+        // 2. 创建一个辅助函数，用于将参数转换为字符串（类似真实的 console 行为）
+        const formatArgs = (args) => args.map(arg => 
+            typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+        ).join(' ');
+
+        // 3. 新建日志方法，在调用原始方法的同时将输出存入数组
+        const log = (...args) => { outputs.push(`${formatArgs(args)}`); original.log(...args); };
+
         try {
+            // 4. 执行你的异步 eval 代码，并等待它完成
             await eval("(async () => {" + code + "})()");
-            return "success";
         } catch (err) {
-            return err;
+            throw new Error(`代码运行时错误: ${err.message}`);
         }
+
+        // 6. 返回收集到的所有日志数组
+        return {
+            "outputs": outputs
+        };
     }
     function handleError(err) {
         return err.message;
     }
 });
 
-//     function handleError(err) {
-//         let stack = err.stack;
-//         if (!stack) {
-//             return err;
-//         }
-//         console.log(stack);
-//         const final_line = stack.split("\n")[1];
-//         const regex = /<anonymous>:(\d+):\d+\)/;
 
-//         const programs_length = programs.split("\n").length;
-//         let match_line = null;
-//         for (const line of stack.split("\n")) {
-//             const match = regex.exec(line);
-//             if (match) {
-//                 const line_num = parseInt(match[1]);
-//                 if (line_num >= programs_length) {
-//                     match_line = line_num - programs_length;
-//                     break;
-//                 }
-//             }
-//         }
-//         if (!match_line) {
-//             return err.message;
-//         }
-//         let f_line = final_line.match(
-//             /\((?<file>.*):(?<line>\d+):(?<pos>\d+)\)/
-//         );
-//         if (f_line && f_line.groups && fs.existsSync(f_line.groups.file)) {
-//             const { file, line, pos } = f_line.groups;
-//             const f = fs.readFileSync(file, "utf8").split("\n");
-//             // let filename = file.match(/(?<=node_modules\\)(.*)/)[1];
-//             let source = file + `:${line}\n${f[line - 1].trim()}\n `;
-
-//             const code_source =
-//                 "at " +
-//                 code.split("\n")[match_line - 1].trim() +
-//                 " in your code";
-//             return source + err.message + "\n" + code_source;
-//         } else if (
-//             f_line &&
-//             f_line.groups &&
-//             f_line.groups.file.includes("<anonymous>")
-//         ) {
-//             const { file, line, pos } = f_line.groups;
-//             let source =
-//                 "Your code" +
-//                 `:${match_line}\n${code.split("\n")[match_line - 1].trim()}\n `;
-//             let code_source = "";
-//             if (line < programs_length) {
-//                 source =
-//                     "In your program code: " +
-//                     programs.split("\n")[line - 1].trim() +
-//                     "\n";
-//                 code_source = `at line ${match_line}:${code
-//                     .split("\n")
-//                     [match_line - 1].trim()} in your code`;
-//             }
-//             return source + err.message + "\n" + code_source;
-//         }
-//         return err.message;
-//     }
-// });
 app.get("/test", (req, res) => {
     res.json({ message: "Hello, world!" });
 });

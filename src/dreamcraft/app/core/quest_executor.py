@@ -7,7 +7,7 @@ from dreamcraft.app.core.messages import MessageBus
 from dreamcraft.app.models import tasks
 from dreamcraft.app.services.knowledge_service import KnowledgeService
 from dreamcraft.app.services.llm_service import LLMService
-from dreamcraft.app.protocols import IMinecraftClient
+from dreamcraft.app.protocols import IAgent
 from dreamcraft.domain import Quest
 
 
@@ -20,12 +20,12 @@ class ExecutorState(StrEnum):
 
 
 class QuestExecutor:
-    def __init__(self, bus: MessageBus, llm: LLMService, knowledge: KnowledgeService, mc: IMinecraftClient):
+    def __init__(self, bus: MessageBus, llm: LLMService, knowledge: KnowledgeService, agent: IAgent):
         self.bus = bus
         self.inbox = bus.register("executor")
         self.llm = llm
         self.knowledge = knowledge
-        self.mc = mc
+        self.agent = agent
 
     async def run(self, context: Quest):
         self.context = context
@@ -69,40 +69,45 @@ class QuestExecutor:
         if not self.context.exec_next:
             print(Style.BRIGHT + Fore.CYAN + "下一个执行节点不存在，执行器进入等待状态。")
             return ExecutorState.WAIT
-        
+        snapshot = (await self.agent.observe()).snapshot
+        self.context.snapshot = snapshot
         _task = tasks.GenerateCodeTask(
             target=self.context.exec_next,
-            snapshot=self.context.executing.actual_snapshot,
+            snapshot=self.context.snapshot,
             reason=self.context.exec_next.extra_info.get("feasible_reason", ""),
             error=str(self.context.exec_history)
         )
         response = await self.llm.execute(_task)
         raw_code = response["result"]
-        final_code = self.knowledge.inject_dependencies(raw_code)
-        final_code = f"""
-            {final_code}
-        """
-        print(Style.BRIGHT + Fore.CYAN + f"注入依赖函数后代码:\n{final_code}")
-        self.context.exec_history["last_code"] = final_code
+        
+        print(Style.BRIGHT + Fore.CYAN + f"原始代码:\n{raw_code}")
+        self.context.exec_history["last_code"] = raw_code
         self.context.token_usage += response.get("token_usage", 0)['uncached_tokens']
+        chat_log = []
         try:
-            execute_result = await asyncio.wait_for(self.mc.execute(final_code), timeout=300.0)
+            execute_result = await asyncio.wait_for(self.agent.execute(raw_code), timeout=300.0)
+            chat_log = execute_result.get("chat_log", [])
             if execute_result["status"] == 200:
                 self.context.snapshot = execute_result["observation"].snapshot
                 return ExecutorState.VERIFY
             else:
                 raise RuntimeError(f"失败, mineflayer服务器返回状态码: {execute_result['status']}")
         except asyncio.TimeoutError:
-            self.context.snapshot = (await self.mc.observe()).snapshot
+            self.context.snapshot = (await self.agent.observe()).snapshot
             self.context.exec_history.setdefault("fail_records", []).append({
                 "snapshot": self.context.snapshot,
                 "reason": "执行超时"
             })
         except Exception as e:
-            self.context.snapshot = (await self.mc.observe()).snapshot
+            self.context.snapshot = (await self.agent.observe()).snapshot
             self.context.exec_history.setdefault("fail_records", []).append({
                 "snapshot": self.context.snapshot,
                 "reason": f"执行异常: {str(e)}"
+            })
+        if chat_log:
+            self.context.exec_history.setdefault("fail_records", []).append({
+                "snapshot": self.context.snapshot,
+                "reason": f"执行记录: {chat_log}"
             })
         return ExecutorState.GENERATE_CODE
         
@@ -124,7 +129,7 @@ class QuestExecutor:
             ))
             self.context.exec_history = {}
             self.context.exec_ind += 1
-            snapshot = (await self.mc.observe()).snapshot
+            snapshot = (await self.agent.observe()).snapshot
             self.context.executing.actual_snapshot = snapshot
             if self.context.executing == self.context.target:
                 return ExecutorState.SUCCESS

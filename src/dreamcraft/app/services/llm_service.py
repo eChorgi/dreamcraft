@@ -193,7 +193,7 @@ class LLMService:
         """唯一的统一执行入口"""
         
         # 1. 组装 Tools (直接从 task 对象上读静态配置！)
-        tools = ["query_wiki", "grep_wiki_files", "read_wiki_section"]
+        tools = ["query_wiki", "grep_wiki_files", "read_wiki_section", "grep_recipe"]  # 基础工具，所有任务都默认具备
         tools.extend(task.extra_tools)
         if task.enable_context_compression:
             tools.append("summary")

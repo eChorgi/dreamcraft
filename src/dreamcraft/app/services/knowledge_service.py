@@ -43,8 +43,10 @@ class KnowledgeService:
     
     def load_js_skills(self):
         all_s = self.skill.load_js_dir_skills(self.skill_js_dir)
-        self.skill.update_private_skills(all_s.private_skills)
-        for _skill in all_s.skills:
+        private_skills = [s for s in all_s if s.is_private]
+        skills = [s for s in all_s if not s.is_private]
+        print(f"更新了 {self.skill.update_private_skills(private_skills)} 个私有技能")
+        for _skill in skills:
             if _skill not in self.skill.skills:
                 self.add_skill(_skill)
             else:
@@ -55,7 +57,7 @@ class KnowledgeService:
         
     def inject_dependencies(self, code: str):
         dep = set()
-        for skill in self.skill.skills:
+        for skill in self.skill.skills + self.skill.private_skills:
             if skill.name.split('(')[0].split('function')[-1] in code:
                 dep.add(skill)
                 dep.update(self.skill.resolve_dependencies(skill))

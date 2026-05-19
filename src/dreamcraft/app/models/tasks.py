@@ -54,12 +54,13 @@ class FeasibilityCheckTask(BaseTask):
     completed: list[Waypoint | str]
     target: Waypoint | str
     snapshot: Snapshot
-    extra_tools = ["query_skill"]
+    extra_tools = ["query_skill", "grep_recipe"]
 
     def parser(self, text) -> dict:
         return parse_bool(text)
 
 class ImaginateTask(BaseTask):
+    reason: str
     completed: list[Waypoint | str]
     target: Waypoint | str
     snapshot: Snapshot
@@ -79,6 +80,7 @@ class ImaginateTask(BaseTask):
 #     query: str
 
 class ExpandPathTask(BaseTask):
+    reason: str
     completed: list[Waypoint | str]
     target: Waypoint | str
     snapshot: Snapshot
@@ -130,7 +132,7 @@ class GenerateCodeTask(BaseTask):
     snapshot: Snapshot
     reason: str = "无"
     error: str = "无"
-    extra_tools = ["query_skill"]
+    extra_tools = ["query_skill", "grep_recipe"]
     def parser(self, text) -> dict:
         return parse_js(text)
     

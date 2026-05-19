@@ -27,19 +27,21 @@ def need_thought(func):
     new_params = [thought_param] + list(sig.parameters.values())
     new_sig = sig.replace(parameters=new_params)
 
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        # 逻辑保持不变：剥离 thought 参数
-        if 'thought' in kwargs:
-            thought = kwargs.pop('thought')
-        elif len(args) > 0:
-            thought = args[0]
-            args = args[1:]
-        else:
-            raise ValueError("Missing required 'thought' parameter")
-        
-        # 可以在这里对 thought 做处理，比如 logging
-        return func(*args, **kwargs)
+    if inspect.iscoroutinefunction(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs): # 👈 升级为 async def
+            if 'thought' in kwargs: kwargs.pop('thought')
+            elif len(args) > 0: args = args[1:]
+            
+            # 🌟 必须在这里真正 await 它，否则协程就会原样漏出去！
+            return await func(*args, **kwargs) 
+    else:
+        # 如果是同步工具 (如 summary, query_wiki)
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if 'thought' in kwargs: kwargs.pop('thought')
+            elif len(args) > 0: args = args[1:]
+            return func(*args, **kwargs)
 
     # 4. 同步更新包装器的签名和类型注解
     wrapper.__signature__ = new_sig
@@ -65,10 +67,10 @@ class ThoughtToolArgs(BaseModel):
         )
 
 class ToolRepo:
-    def __init__(self, knowledges: KnowledgeService, quest: QuestService, mc: Agent = None):
+    def __init__(self, knowledges: KnowledgeService, quest: QuestService, agent: Agent):
         self.knowledges = knowledges
         self.quest = quest
-        self.mc = mc
+        self.agent = agent
         self._all_tools = None  # 用于缓存工具实例的字典
 
     def __getitem__(self, key: str) -> tool:
@@ -245,7 +247,49 @@ class ToolRepo:
         )
         @need_thought
         def observe():
-            return self.mc.observe()
+            return self.agent.observe()
+        
+
+        @tool("grep_recipe", description=
+"""
+# 简短摘要 (Summary)
+利用正则表达式检索配方信息，返回相关物品的合成配方详情。当你缺少某个物品的中间合成信息, 你应该调用这个工具进行查找, 例如你已知"木栅栏"需要"木板"和"木棍", 但不清楚"木板"的合成方法, 你就可以调用这个工具查询"木板"的配方, 从而获取如何制作"木板"的详细步骤。
+# 返回格式
+torch x4 <==无需工作台== charcoal x1, stick x1
+# 注意
+- 你应该先尽可能宽泛的查询(如查询木栅栏时应该查询"fence"而不是"wood_fence"), 除非你很确定物品的名称是什么
+- 你必须注意产物和原料的数量关系，例如上面这个配方表示制作4个torch需要1个charcoal和1个stick。你应该把这些信息纳入计算范围
+""",
+            args_schema=ThoughtToolArgs.extend(
+                "GrepRecipeArgs",
+                pattern=(str, "搜索关键词，支持正则表达式"),
+                max_results=(int, "返回结果的最大数量，默认为10")
+            )
+        )
+        @need_thought
+        async def grep_recipe(pattern: str, max_results: int = 10):
+            def handle_json(s):
+                rs = json.loads(s)
+                return [f"{r['name']} x{r['resultCount']} <=={'工作台' if r.get('needCraftingTable') else '无需工作台'}== " + ', '.join([f"{x['name']} x{x['count']}" for x in r['ingredients']]) for r in rs]
+            response = await self.agent.execute(f"log(await grepRecipe(bot, new RegExp('{pattern}')));")
+            recipes = response.get("outputs", [])[0]
+            recipes = handle_json(recipes)
+            return_str = ""
+            if len(recipes) > 0:
+                if len(recipes) > max_results:
+                    return_str = f"查询范围过于宽泛, 找到 {len(recipes)} 个匹配的配方:{', '.join([r.split(' x')[0] for r in recipes])}，只显示前 {max_results} 个\n"
+                    recipes = recipes[:max_results]
+                else:
+                    return_str = f"找到 {len(recipes)} 个匹配的配方:\n"
+            else:
+                return "没有找到匹配的配方！请调整查询正则表达式后重试。\n"
+            
+            for r in recipes:
+                return_str += f"{r}\n"
+            return return_str
+
+        
+        
     
         self._all_tools = {
             "query_wiki": query_wiki,
@@ -255,6 +299,7 @@ class ToolRepo:
             "grep_wiki_files": grep_wiki_files,
             "read_wiki_section": read_wiki_section,
             "get_next_waypoints": get_next_waypoints,
-            "observe": observe
+            "observe": observe,
+            "grep_recipe": grep_recipe,
         }
         return self._all_tools

@@ -1,7 +1,7 @@
 import asyncio
 
 from dreamcraft.app import MessageBus, QuestOrchestrator, QuestExecutor, LLMService, QuestService, KnowledgeService
-from dreamcraft.infra import Agent, AzureInstance, QuestRepo, PromptRepo, WikiRepo, SkillRepo, LLMClient, ToolRepo
+from dreamcraft.infra import Agent, AzureInstance, MineflayerInterface, QuestRepo, PromptRepo, WikiRepo, SkillRepo, LLMClient, ToolRepo
 from dreamcraft.container import AppContainer, InfraContainer, ServiceContainer
 from dreamcraft.config import Settings
 
@@ -21,7 +21,7 @@ class DreamCraft:
             self = self.create(Settings())
     
     @classmethod
-    async def create(cls, settings: Settings):
+    async def create(cls, settings: Settings = None):
         container = await bootstrap(settings)
         return cls(container)
     
@@ -31,7 +31,7 @@ class DreamCraft:
             return
         self._running = True
         print("启动 DreamCraft...")
-        self.container.infra.mc.start()
+        await self.container.infra.agent.start()
     
     async def run(self, target: str):
         if not self._running:
@@ -58,38 +58,38 @@ async def bootstrap(settings: Settings = Settings()):
     i_prompt = PromptRepo(settings)
     i_azure = None
     if settings.azure_login:
-        i_azure = AzureInstance(settings = settings)
-    i_mc = Agent(settings, azure_instance=i_azure)
-
+        i_azure = AzureInstance(settings)
+    i_mineflayer = MineflayerInterface(settings)
     # 初始化服务层组件
     s_knowledge = KnowledgeService(settings, wiki=i_wiki, llm=i_llm, skill=i_skill)
     s_quest = QuestService(quests=i_quest)
 
     # 初始化工具管理器
-    i_tools = ToolRepo(s_knowledge, s_quest)
+    i_agent = Agent(settings, mineflayer=i_mineflayer, knowledge=s_knowledge)
+    i_tools = ToolRepo(s_knowledge, s_quest, i_agent)
 
     # s_llm = LLMServiceMock(llm=i_llm, prompt=i_prompt, tool=i_tools, quest=i_quest)
     s_llm = LLMService(llm=i_llm, prompt=i_prompt, tool=i_tools, quest=i_quest)
 
     # 初始化 Orchestrator
-    s_executor = QuestExecutor(bus=message_bus, llm=s_llm, knowledge=s_knowledge, mc=i_mc)
-    s_orchestrator = QuestOrchestrator(quest=s_quest, llm=s_llm, prompt=i_prompt, bus=message_bus, mc=i_mc, executor=s_executor)
+    s_executor = QuestExecutor(bus=message_bus, llm=s_llm, knowledge=s_knowledge, agent=i_agent)
+    s_orchestrator = QuestOrchestrator(quest=s_quest, llm=s_llm, prompt=i_prompt, bus=message_bus, agent=i_agent, executor=s_executor)
 
-    container.register("infra", infra)
-    container.register("service", service)
-    infra.register("llm", i_llm)
-    infra.register("wiki", i_wiki)
-    infra.register("quest", i_quest)
-    infra.register("prompt", i_prompt)
-    infra.register("skill", i_skill)
-    infra.register("tool", i_tools)
-    infra.register("azure", i_azure)
-    infra.register("mc", i_mc)
-    service.register("knowledge", s_knowledge)
-    service.register("quest", s_quest)
-    service.register("llm", s_llm)
-    service.register("orchestrator", s_orchestrator)
-    service.register("executor", s_executor)
+    container.infra=infra
+    container.service=service
+    infra.llm=i_llm
+    infra.wiki=i_wiki
+    infra.quest=i_quest
+    infra.prompt=i_prompt
+    infra.skill=i_skill
+    infra.tool=i_tools
+    infra.azure=i_azure
+    infra.agent=i_agent
+    service.knowledge=s_knowledge
+    service.quest=s_quest
+    service.llm=s_llm
+    service.orchestrator=s_orchestrator
+    service.executor=s_executor
 
     await asyncio.gather(
         i_wiki.load(),

@@ -5,5 +5,6 @@
     "workbench.editor.limit.value": 7,
     "workbench.editor.limit.perEditorGroup": true,
     "editor.smoothScrolling": true,             // 核心：让所有滚动（包括键盘）带上平滑过渡
-  "editor.cursorSmoothCaretAnimation": "on",  // 让光标移动也像温润的玉石一样滑动
+  "editor.cursorSmoothCaretAnimation": "on",
+  "search.useIgnoreFiles": false, // 让光标移动也像温润的玉石一样滑动
 }

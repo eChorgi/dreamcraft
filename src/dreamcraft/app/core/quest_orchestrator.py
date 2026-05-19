@@ -8,7 +8,7 @@ from dreamcraft.app.core import messages
 from dreamcraft.app.core.messages import MessageBus
 from dreamcraft.app.core.quest_executor import QuestExecutor
 from dreamcraft.app.models import tasks
-from dreamcraft.app.protocols import IPromptRepo, IMinecraftClient
+from dreamcraft.app.protocols import IPromptRepo, IAgent
 from dreamcraft.app.services.llm_service import LLMService
 from dreamcraft.app.services.quest_service import QuestService
 
@@ -16,7 +16,7 @@ from dreamcraft.domain import Edge, Waypoint, Quest
 
 class OrchestratorState(StrEnum):
     INIT = auto()       # 初始化规划
-    CHECK_FEASIBILITY = auto()  # 检查技能可用性
+    CHECK_FEASIBILITY = auto()  # 检查可用性
     IMAGINATE = auto()  # 想象下一个状态
     CHECK_GRANULARITY = auto()  # 检查任务粒度
     WAIT_FOR_EXECUTOR = auto()  # 等待执行
@@ -31,14 +31,14 @@ class QuestOrchestrator:
             llm: LLMService, 
             prompt: IPromptRepo,
             bus: MessageBus,
-            mc: IMinecraftClient,
+            agent: IAgent,
             executor: QuestExecutor
         ):
         self.quest = quest
         self.llm = llm
         self.prompt = prompt
         self.bus = bus
-        self.mc = mc
+        self.agent = agent
         self.executor = executor
         self.inbox = bus.register("orchestrator")
 
@@ -85,7 +85,7 @@ class QuestOrchestrator:
     # ================= 状态处理方法 =================
 
     async def handle_init(self) -> OrchestratorState:
-        snapshot = (await self.mc.observe()).snapshot
+        snapshot = (await self.agent.observe()).snapshot
         self.context.current.actual_snapshot = snapshot
         self.context.current.imaginated_snapshot = snapshot
         return OrchestratorState.CHECK_FEASIBILITY
@@ -98,12 +98,13 @@ class QuestOrchestrator:
         )
         response = await self.llm.execute(_task)
         reason = response.get("reason", "")
+        if reason:
+            self.context.next.extra_info["feasible_reason"] = response.get("reason", "")
         is_feasible = response["result"]
         self.context.token_usage += response.get("token_usage", 0)['uncached_tokens']
         print(Fore.RED+f"检查可行性结果: {is_feasible}")
         print(Fore.RED+f"当前已使用 tokens: {self.context.token_usage}")
         if is_feasible:
-            self.context.next.extra_info["feasible_reason"] = response.get("reason", "")
             self.context.exec_path.append(self.context.next)
             await self.inbox.emit_to("executor", messages.ExecutableMessage())
             return OrchestratorState.IMAGINATE
@@ -113,12 +114,16 @@ class QuestOrchestrator:
 
     async def handle_imaginate(self) -> OrchestratorState:
         _task = tasks.ImaginateTask(
+            reason = self.context.next.extra_info.get("feasible_reason", ""),
             completed = self.context.completed,
             target = self.context.next,
             snapshot = self.context.current.actual_snapshot if self.context.current.actual_snapshot else self.context.current.imaginated_snapshot
         )
         response = await self.llm.execute(_task)
         imagined_snapshot = response["result"]
+        reason = response.get("reason", "")
+        if reason:
+            self.context.history_reasons.append(reason)
         self.context.token_usage += response.get("token_usage", 0)['uncached_tokens']
         self.context.next.imaginated_snapshot = imagined_snapshot
         print(Fore.RED+f"想象下一个状态结果: {imagined_snapshot}")
@@ -139,12 +144,17 @@ class QuestOrchestrator:
         return OrchestratorState.WAIT_FOR_EXECUTOR
 
     async def handle_check_granularity(self) -> OrchestratorState:
+        if self.context.next == self.context.target:
+            return OrchestratorState.EXPAND
         _task = tasks.GranularityCheckTask(
             target = self.context.next,
             snapshot = self.context.current.actual_snapshot if self.context.current.actual_snapshot else self.context.current.imaginated_snapshot
         )
         response = await self.llm.execute(_task)
         is_granular = response["result"]
+        reason = response.get("reason", "")
+        if reason:
+            self.context.history_reasons.append(reason)
         self.context.token_usage += response.get("token_usage", 0)['uncached_tokens']
         print(Fore.RED+f"检查任务粒度结果: {is_granular}")
         print(Fore.RED+f"当前已使用 tokens: {self.context.token_usage}")
@@ -162,6 +172,9 @@ class QuestOrchestrator:
         )
         response = await self.llm.execute(_task)
         next_waypoint = response["result"]
+        reason = response.get("reason", "")
+        if reason:
+            self.context.history_reasons.append(reason)
         self.context.token_usage += response.get("token_usage", 0)['uncached_tokens']
         print(Fore.RED+f"导航结果: {next_waypoint.line if next_waypoint else '无'}")
         print(Fore.RED+f"当前已使用 tokens: {self.context.token_usage}")
@@ -175,11 +188,15 @@ class QuestOrchestrator:
 
     async def handle_expand(self) -> OrchestratorState:
         _task = tasks.ExpandPathTask(
+            reason = self.context.next.extra_info.get("feasible_reason", ""),
             completed = self.context.completed,
             target = self.context.next,
             snapshot = self.context.current.actual_snapshot if self.context.current.actual_snapshot else self.context.current.imaginated_snapshot
         )
         response = await self.llm.execute(_task)
+        reason = response.get("reason", "")
+        if reason:
+            self.context.history_reasons.append(reason)
         path_wps = response["result"]
         self.context.token_usage += response.get("token_usage", 0)['uncached_tokens']
         print(Fore.RED+f"分解结果: {[wp.line for wp in path_wps]}")

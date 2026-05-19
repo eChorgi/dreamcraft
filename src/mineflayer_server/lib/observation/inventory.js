@@ -1,4 +1,4 @@
-const { Observation } = require("./base");
+import { Observation } from "./base.js";
 
 class Inventory extends Observation {
     constructor(bot) {
@@ -35,5 +35,4 @@ function itemToDict(acc, cur) {
     return acc;
 }
 
-//export modules
-module.exports = Inventory;
+export default Inventory;

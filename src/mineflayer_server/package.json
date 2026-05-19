@@ -1,4 +1,7 @@
 {
+  "name": "mineflayer_server",
+  "version": "1.0.0",
+  "type": "module",
   "dependencies": {
     "canvas": "^3.2.3",
     "minecraft-protocol": "^1.66.1",

@@ -1,4 +1,4 @@
-const Observation = require("./base.js").Observation;
+import { Observation } from "./base.js";
 
 class onError extends Observation {
     constructor(bot) {
@@ -19,4 +19,4 @@ class onError extends Observation {
     }
 }
 
-module.exports = onError;
+export default onError;

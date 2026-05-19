@@ -2,13 +2,17 @@
 
 from dreamcraft.utils import SubprocessRunner
 
-class MineflayerServer:
-    def __init__(self):
+class MineflayerInterface:
+    def __init__(self, settings):
+        self.mineflayer_path = settings.mineflayer_path
+        self.mineflayer_port = settings.mineflayer_port
+        self.log_dir = settings.log_dir
+
         self.process = self.create_mineflayer_server(self.mineflayer_path, self.mineflayer_port)
 
-        @property
-        def is_running(self):
-            return self.process.is_running if self.process else False
+    @property
+    def is_running(self):
+        return self.process.is_running if self.process else False
         
     def create_mineflayer_server(self, mineflayer_path, server_port):
         (self.log_dir / "mineflayer").mkdir(parents=True, exist_ok=True)

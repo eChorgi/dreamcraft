@@ -1,5 +1,5 @@
 // Blocks = require("./blocks")
-const { Observation } = require("./base");
+import { Observation } from "./base.js"; 
 
 class Voxels extends Observation {
     constructor(bot) {
@@ -64,4 +64,7 @@ function getInventoryItems(bot) {
     return items;
 }
 
-module.exports = { Voxels, BlockRecords };
+export {
+    Voxels,
+    BlockRecords,
+}

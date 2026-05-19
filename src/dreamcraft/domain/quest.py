@@ -21,6 +21,7 @@ class Quest:
 
         self.token_usage = 0
         self.history_log = []
+        self.history_reasons = []
 
         self.init()
     
