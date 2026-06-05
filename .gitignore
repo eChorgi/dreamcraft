@@ -1,7 +1,7 @@
 test/
 data/
 .cache/
-.论文/
+论文/
 .vscode/
 _raw_data/
 node_modules/

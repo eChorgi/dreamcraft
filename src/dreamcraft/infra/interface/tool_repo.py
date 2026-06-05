@@ -276,17 +276,35 @@ torch x4 <==无需工作台== charcoal x1, stick x1
             recipes = handle_json(recipes)
             return_str = ""
             if len(recipes) > 0:
-                if len(recipes) > max_results:
-                    return_str = f"查询范围过于宽泛, 找到 {len(recipes)} 个匹配的配方:{', '.join([r.split(' x')[0] for r in recipes])}，只显示前 {max_results} 个\n"
-                    recipes = recipes[:max_results]
-                else:
-                    return_str = f"找到 {len(recipes)} 个匹配的配方:\n"
+                return_str = f"找到 {len(recipes)} 个匹配的配方:\n"
             else:
                 return "没有找到匹配的配方！请调整查询正则表达式后重试。\n"
             
             for r in recipes:
                 return_str += f"{r}\n"
             return return_str
+        # @need_thought
+        # async def grep_recipe(pattern: str, max_results: int = 10):
+        #     def handle_json(s):
+        #         rs = json.loads(s)
+        #         return [f"{r['name']} x{r['resultCount']} <=={'工作台' if r.get('needCraftingTable') else '无需工作台'}== " + ', '.join([f"{x['name']} x{x['count']}" for x in r['ingredients']]) for r in rs]
+        #     response = await self.agent.execute(f"log(await grepRecipe(bot, new RegExp('{pattern}')));")
+        #     recipes = response.get("outputs", [])[0]
+        #     recipes = handle_json(recipes)
+        #     return_str = ""
+        #     if len(recipes) > 0:
+        #         if len(recipes) > max_results:
+        #             return_str = f"查询范围过于宽泛, 找到 {len(recipes)} 个匹配的配方:{', '.join([r.split(' x')[0] for r in recipes])}，只显示前 {max_results} 个\n"
+        #             recipes = recipes[:max_results]
+        #         else:
+        #             return_str = f"找到 {len(recipes)} 个匹配的配方:\n"
+        #     else:
+        #         return "没有找到匹配的配方！请调整查询正则表达式后重试。\n"
+            
+        #     for r in recipes:
+        #         return_str += f"{r}\n"
+        #     return return_str
+
 
         
         

@@ -134,7 +134,7 @@ class LLMService:
                     if current_iteration > 0:
                         print(f"  📝 提取到摘要内容: {observation_str}")
                     else:
-                        observation_str = "第一轮没有摘要内容"
+                        observation_str = ""
 
                 tool_results_dict[tool_call["id"]] = observation_str
 
